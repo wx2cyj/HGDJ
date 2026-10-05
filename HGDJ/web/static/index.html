@@ -83,6 +83,8 @@ a{color:var(--accent2);text-decoration:none}
 .player-section{padding:0 24px 24px}
 .player-container{background:#000;border-radius:12px;overflow:hidden;position:relative}
 .player-container video{width:100%;max-height:60vh;display:block}
+.player-tip{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.8);color:#fff;padding:10px 22px;border-radius:24px;font-size:16px;pointer-events:none;opacity:0;transition:opacity .2s;z-index:25;font-weight:600;backdrop-filter:blur(6px);box-shadow:0 4px 16px rgba(0,0,0,.5)}
+.player-tip.show{opacity:1}
 .player-title{padding:12px;font-size:14px;color:var(--text2);display:flex;justify-content:space-between;align-items:center}
 .player-nav{display:flex;gap:10px;padding:0 12px 12px}
 /* Downloads page */
@@ -343,9 +345,10 @@ async function openDetail(seriesId) {
     html += `<div class="player-section" id="playerSection" style="display:none">
       <div class="player-container">
         <video id="videoPlayer" controls playsinline></video>
+        <div class="player-tip" id="playerTip"></div>
         <div class="player-title">
           <span id="playerTitle"></span>
-          <span style="font-size:12px;color:var(--text2)">CENC 实时解密推流</span>
+          <span style="font-size:12px;color:var(--text2)">空格键 暂停/播放 · 左右方向键 快退/快进 5秒</span>
         </div>
         <div class="player-nav">
           <button class="btn btn-outline" onclick="playEp(-1)">⏮ 上一集</button>
@@ -421,6 +424,72 @@ function playEp(delta) {
     playEpisode(_currentSeries, next, _totalEps);
   }
 }
+
+// ── 播放提示与时间格式化 ──
+let _tipTimer = null;
+function showPlayerTip(text) {
+  const tip = document.getElementById('playerTip');
+  if (!tip) return;
+  tip.textContent = text;
+  tip.classList.add('show');
+  clearTimeout(_tipTimer);
+  _tipTimer = setTimeout(() => tip.classList.remove('show'), 800);
+}
+
+function formatTime(sec) {
+  sec = Math.floor(sec || 0);
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
+
+// ── 播放器快捷键（空格暂停/播放，左右方向键快进/后退 5 秒） ──
+document.addEventListener('keydown', (e) => {
+  // 如果焦点在输入框中，不拦截快捷键（避免影响搜索输入）
+  const tag = (e.target && e.target.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) {
+    return;
+  }
+
+  const modal = document.getElementById('modal');
+  const video = document.getElementById('videoPlayer');
+  const section = document.getElementById('playerSection');
+
+  // 仅在弹窗打开且播放器已载入时生效
+  if (!modal || !modal.classList.contains('show') || !section || section.style.display === 'none' || !video) {
+    return;
+  }
+
+  // 1. 空格键：暂停 / 播放
+  if (e.code === 'Space' || e.key === ' ' || e.keyCode === 32) {
+    e.preventDefault();
+    if (video.paused) {
+      video.play().then(() => showPlayerTip('▶ 播放')).catch(() => {});
+    } else {
+      video.pause();
+      showPlayerTip('⏸ 暂停');
+    }
+  }
+  // 2. 左方向键：后退 5 秒
+  else if (e.code === 'ArrowLeft' || e.key === 'ArrowLeft' || e.keyCode === 37) {
+    e.preventDefault();
+    const newTime = Math.max(0, video.currentTime - 5);
+    video.currentTime = newTime;
+    showPlayerTip(`⏪ -5s (${formatTime(newTime)})`);
+  }
+  // 3. 右方向键：快进 5 秒
+  else if (e.code === 'ArrowRight' || e.key === 'ArrowRight' || e.keyCode === 39) {
+    e.preventDefault();
+    const dur = isNaN(video.duration) ? Infinity : video.duration;
+    const newTime = Math.min(dur, video.currentTime + 5);
+    video.currentTime = newTime;
+    showPlayerTip(`⏩ +5s (${formatTime(newTime)})`);
+  }
+  // 4. ESC 键：退出弹窗
+  else if (e.code === 'Escape' || e.key === 'Escape' || e.keyCode === 27) {
+    closeModal();
+  }
+});
 
 // ── 下载操作 ──
 async function startDownload(seriesId) {
