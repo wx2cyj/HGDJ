@@ -1,0 +1,17 @@
+{
+  "web": {
+    "port": 8088
+  },
+  "download": {
+    "root": "/media",
+    "concurrent": 2,
+    "retries": 3,
+    "request_interval": 2
+  },
+  "state": {
+    "database": "/data/state.sqlite3"
+  },
+  "log": {
+    "directory": "/logs"
+  }
+}

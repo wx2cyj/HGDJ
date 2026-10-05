@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>HGDJ</Name>
+  <Repository>ghcr.io/wx2cyj/hgdj:latest</Repository>
+  <Registry>https://ghcr.io</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support/>
+  <Project>https://github.com/wx2cyj/HGDJ</Project>
+  <Overview>红果短剧（HGDJ）：基于红果 App 接口逆向，突破网页端 3 集限制获取全集。带 WebUI 管理界面，支持按需选剧下载和网页端在线解密即点即播，自动生成 Emby/Jellyfin 刮削结构与 NFO 元数据。</Overview>
+  <Category>Downloaders: MediaApp:Video</Category>
+  <WebUI>http://[IP]:[PORT:8088]</WebUI>
+  <TemplateURL/>
+  <Icon/>
+  <ExtraParams>--restart unless-stopped</ExtraParams>
+  <PostArgs>--daemon</PostArgs>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires>私有镜像部署说明：&#xD;
+1. 首次使用前，先在 Unraid 终端运行 docker login ghcr.io -u wx2cyj 登录你的 GitHub 账号以获取私有镜像拉取权限。&#xD;
+2. 启动容器前，先将 config.example.json 复制为 config.json 并放到 /mnt/user/appdata/HGDJ/config/ 目录下。</Requires>
+  <Config Name="WebUI 端口" Target="8088" Default="8088" Mode="tcp" Description="WebUI 管理界面端口" Type="Port" Display="always" Required="true" Mask="false">8088</Config>
+  <Config Name="配置文件目录" Target="/config" Default="/mnt/user/appdata/HGDJ/config" Mode="rw" Description="存放 config.json 的目录" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/HGDJ/config</Config>
+  <Config Name="状态库目录" Target="/data" Default="/mnt/user/appdata/HGDJ/data" Mode="rw" Description="SQLite 状态库存放目录" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/HGDJ/data</Config>
+  <Config Name="日志目录" Target="/logs" Default="/mnt/user/appdata/HGDJ/logs" Mode="rw" Description="运行日志目录" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/HGDJ/logs</Config>
+  <Config Name="媒体目录" Target="/media" Default="/mnt/user/QTZL/红果" Mode="rw" Description="视频下载保存目录" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/QTZL/红果</Config>
+  <Config Name="时区" Target="TZ" Default="Asia/Shanghai" Mode="" Description="容器时区" Type="Variable" Display="always" Required="true" Mask="false">Asia/Shanghai</Config>
+  <Config Name="文件权限掩码" Target="UMASK" Default="000" Mode="" Description="新创建文件权限掩码，默认 000（避免 Unraid SMB 共享权限不足）" Type="Variable" Display="advanced" Required="false" Mask="false">000</Config>
+</Container>

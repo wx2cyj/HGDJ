@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HGDJ 红果短剧</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0f0f0f;--card:#1a1a2e;--card2:#16213e;--accent:#e94560;--accent2:#ff6b6b;--text:#eee;--text2:#aaa;--border:#2a2a3e;--green:#00c853;--orange:#ff9800;--red:#e94560;--input-bg:#1e1e3a}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+a{color:var(--accent2);text-decoration:none}
+/* Header */
+.header{background:linear-gradient(135deg,#1a1a2e,#16213e);padding:12px 20px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.5)}
+.logo{font-size:22px;font-weight:bold;color:var(--accent2);white-space:nowrap}
+.logo span{color:var(--text)}
+.search-box{flex:1;max-width:500px;position:relative}
+.search-box input{width:100%;padding:10px 40px 10px 16px;border-radius:24px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:15px;outline:none}
+.search-box input:focus{border-color:var(--accent)}
+.search-box button{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:var(--accent);border:none;color:#fff;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px}
+.nav{display:flex;gap:4px}
+.nav button{background:none;border:1px solid var(--border);color:var(--text2);padding:7px 16px;border-radius:20px;cursor:pointer;font-size:13px;white-space:nowrap;transition:.2s}
+.nav button.active,.nav button:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* Main */
+.main{max-width:1400px;margin:0 auto;padding:16px}
+.section-title{font-size:18px;font-weight:bold;margin:16px 0 12px;display:flex;align-items:center;gap:8px}
+.section-title .icon{font-size:22px}
+/* Grid */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px}
+@media(min-width:768px){.grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}}
+.card{background:var(--card);border-radius:12px;overflow:hidden;cursor:pointer;transition:transform .2s,box-shadow .2s;position:relative}
+.card:hover{transform:translateY(-4px);box-shadow:0 8px 24px rgba(233,69,96,.15)}
+.card-img{width:100%;aspect-ratio:3/4;object-fit:cover;background:#222}
+.card-info{padding:10px}
+.card-title{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-meta{font-size:12px;color:var(--text2);margin-top:4px;display:flex;gap:6px;flex-wrap:wrap}
+.card-badge{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.7);color:var(--accent2);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+.tag{background:var(--card2);padding:2px 8px;border-radius:8px;font-size:11px;color:var(--text2)}
+/* Detail modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;display:none;justify-content:center;align-items:flex-start;padding:40px 16px;overflow-y:auto}
+.modal-overlay.show{display:flex}
+.modal{background:var(--card);border-radius:16px;max-width:900px;width:100%;max-height:90vh;overflow-y:auto;position:relative}
+.modal-close{position:absolute;top:12px;right:16px;background:rgba(0,0,0,.5);border:none;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:20px;z-index:10}
+.detail-header{display:flex;gap:20px;padding:24px;flex-wrap:wrap}
+.detail-poster{width:200px;flex-shrink:0;border-radius:12px;overflow:hidden}
+.detail-poster img{width:100%;aspect-ratio:3/4;object-fit:cover}
+.detail-info{flex:1;min-width:200px}
+.detail-info h2{font-size:22px;margin-bottom:8px}
+.detail-info .intro{color:var(--text2);font-size:13px;line-height:1.6;max-height:100px;overflow:hidden;margin:8px 0}
+.detail-stats{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
+.stat{background:var(--input-bg);padding:6px 14px;border-radius:8px;font-size:13px}
+.stat b{color:var(--accent2)}
+.detail-actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+.btn{padding:10px 24px;border-radius:24px;border:none;cursor:pointer;font-size:14px;font-weight:600;transition:.2s;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent2)}
+.btn-success{background:var(--green);color:#fff}
+.btn-outline{background:none;border:1px solid var(--border);color:var(--text)}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+/* Episode list */
+.ep-section{padding:0 24px 24px}
+.ep-section h3{font-size:16px;margin-bottom:12px}
+.ep-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:8px}
+.ep-btn{padding:10px 4px;text-align:center;border-radius:8px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);cursor:pointer;font-size:13px;transition:.2s}
+.ep-btn:hover{border-color:var(--accent);color:var(--accent)}
+.ep-btn.done{border-color:var(--green);color:var(--green)}
+.ep-btn.failed{border-color:var(--red);color:var(--red)}
+.ep-btn.downloading{border-color:var(--orange);color:var(--orange);animation:pulse 1.5s infinite}
+.ep-btn.playing{background:var(--accent);color:#fff;border-color:var(--accent)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+/* Player */
+.player-section{padding:0 24px 24px}
+.player-container{background:#000;border-radius:12px;overflow:hidden;position:relative}
+.player-container video{width:100%;max-height:60vh;display:block}
+.player-title{padding:12px;font-size:14px;color:var(--text2)}
+.player-nav{display:flex;gap:10px;padding:0 12px 12px}
+/* Downloads page */
+.dl-item{background:var(--card);border-radius:12px;padding:16px;margin-bottom:12px;display:flex;gap:16px;align-items:center}
+.dl-item .name{flex:1;font-weight:600}
+.dl-progress{width:200px}
+.progress-bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.progress-fill{height:100%;background:var(--green);border-radius:3px;transition:width .3s}
+.progress-text{font-size:11px;color:var(--text2);margin-top:4px}
+/* Status badge */
+.status{padding:3px 10px;border-radius:10px;font-size:11px;font-weight:600}
+.status-done{background:rgba(0,200,83,.15);color:var(--green)}
+.status-downloading{background:rgba(255,152,0,.15);color:var(--orange)}
+.status-failed{background:rgba(233,69,96,.15);color:var(--red)}
+.status-pending{background:rgba(170,170,170,.1);color:var(--text2)}
+/* Loading */
+.loading{text-align:center;padding:40px;color:var(--text2)}
+.spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* Empty */
+.empty{text-align:center;padding:60px 20px;color:var(--text2)}
+.empty .icon{font-size:48px;margin-bottom:12px}
+/* Responsive */
+@media(max-width:640px){
+  .header{flex-wrap:wrap;gap:10px}
+  .nav{overflow-x:auto;width:100%}
+  .detail-header{flex-direction:column}
+  .detail-poster{width:140px}
+  .grid{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="logo">🍎 <span>红果下载</span></div>
+  <div class="search-box">
+    <input id="searchInput" placeholder="搜索短剧名称..." onkeydown="if(event.key==='Enter')doSearch()">
+    <button onclick="doSearch()">🔍</button>
+  </div>
+  <div class="nav">
+    <button class="active" onclick="showPage('home',this)">首页</button>
+    <button onclick="showPage('real-drama',this)">真人剧</button>
+    <button onclick="showPage('comic-drama',this)">漫剧</button>
+    <button onclick="showPage('ai-drama',this)">AI剧</button>
+    <button onclick="showPage('downloads',this)">下载管理</button>
+  </div>
+</div>
+
+<div class="main" id="content">
+  <div class="loading"><div class="spinner"></div><p style="margin-top:12px">加载中...</p></div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal-overlay" id="modal" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<script>
+const API = '';
+let currentPage = 'home';
+
+// ── 页面导航 ──
+function showPage(page, btn) {
+  currentPage = page;
+  document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (page === 'home') loadHome();
+  else if (page === 'downloads') loadDownloads();
+  else loadCategory(page);
+}
+
+// ── 首页 ──
+async function loadHome() {
+  const el = document.getElementById('content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const [dashRes, recRes] = await Promise.all([
+      fetch(API+'/api/dashboard').then(r=>r.json()),
+      fetch(API+'/api/recommend').then(r=>r.json()),
+    ]);
+    let html = '';
+    // 统计
+    const d = dashRes;
+    html += `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+      <div class="stat">已收录 <b>${d.total_series||0}</b> 部</div>
+      <div class="stat">已下载 <b>${d.done_episodes||0}</b> 集</div>
+      <div class="stat">下载中 <b>${d.downloading_episodes||0}</b> 集</div>
+      <div class="stat">总大小 <b>${d.total_size_mb||0}</b> MB</div>
+    </div>`;
+    // 推荐
+    html += '<div class="section-title"><span class="icon">🔥</span>热门推荐</div>';
+    html += renderGrid(recRes.items || []);
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = '<div class="empty"><div class="icon">😵</div>加载失败: '+e.message+'</div>';
+  }
+}
+
+// ── 分类 ──
+async function loadCategory(cat) {
+  const el = document.getElementById('content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const res = await fetch(API+'/api/browse?category='+cat).then(r=>r.json());
+    let html = '<div class="section-title"><span class="icon">📂</span>' +
+      {'real-drama':'真人剧','comic-drama':'漫剧','ai-drama':'AI剧','comic':'漫画'}[cat] + '</div>';
+    html += renderGrid(res.items || []);
+    if (!res.items || res.items.length === 0)
+      html += '<div class="empty"><div class="icon">📭</div>暂无数据</div>';
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = '<div class="empty"><div class="icon">😵</div>加载失败</div>';
+  }
+}
+
+// ── 搜索 ──
+async function doSearch() {
+  const q = document.getElementById('searchInput').value.trim();
+  if (!q) return;
+  const el = document.getElementById('content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+  try {
+    const res = await fetch(API+'/api/search?q='+encodeURIComponent(q)).then(r=>r.json());
+    let html = '<div class="section-title"><span class="icon">🔍</span>搜索: "'+q+'"</div>';
+    if (res.items && res.items.length > 0) {
+      html += renderGrid(res.items);
+    } else {
+      html += '<div class="empty"><div class="icon">📭</div>未找到相关短剧<br><small style="color:#666">提示：搜索功能依赖网页端，部分剧名可能搜不到</small></div>';
+    }
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = '<div class="empty"><div class="icon">😵</div>搜索失败</div>';
+  }
+}
+
+// ── 渲染卡片网格 ──
+function renderGrid(items) {
+  if (!items || items.length === 0) return '';
+  let html = '<div class="grid">';
+  for (const item of items) {
+    const sid = item.series_id || '';
+    const name = item.series_name || '未知';
+    const cover = item.series_cover || '';
+    const eps = item.episode_cnt || item.episode_right_text || '';
+    const tags = (item.tags || []).slice(0, 3);
+    const imgSrc = cover ? cover.replace('~tplv-shrink:640:0', '~tplv-shrink:300:0') : '';
+    html += `<div class="card" onclick="openDetail('${sid}')">
+      <img class="card-img" src="${imgSrc}" alt="${name}" loading="lazy" onerror="this.style.background='#333'">
+      <div class="card-badge">${eps}</div>
+      <div class="card-info">
+        <div class="card-title" title="${name}">${name}</div>
+        <div class="card-meta">${tags.map(t=>'<span class="tag">'+t+'</span>').join('')}</div>
+      </div>
+    </div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+// ── 详情弹窗 ──
+async function openDetail(seriesId) {
+  const modal = document.getElementById('modal');
+  const mc = document.getElementById('modalContent');
+  modal.classList.add('show');
+  mc.innerHTML = '<div class="loading" style="padding:60px"><div class="spinner"></div></div>';
+  try {
+    const res = await fetch(API+'/api/series/'+seriesId).then(r=>r.json());
+    if (res.error) throw new Error(res.error);
+    const d = res.detail;
+    const eps = res.episodes || [];
+    const stats = res.stats || {};
+    const inQueue = res.in_queue;
+    const name = d.series_name || '';
+    const cover = d.series_cover || '';
+    const intro = d.series_intro || '';
+    const tags = (d.tags || []);
+    const total = d.episode_cnt || d.vid_list?.length || 0;
+    const vidList = d.vid_list || [];
+
+    let html = `<button class="modal-close" onclick="closeModal()">✕</button>`;
+    html += `<div class="detail-header">
+      <div class="detail-poster"><img src="${cover}" alt="${name}"></div>
+      <div class="detail-info">
+        <h2>${name}</h2>
+        <div class="card-meta" style="margin:8px 0">${tags.map(t=>'<span class="tag">'+t+'</span>').join('')}</div>
+        <div class="intro">${intro}</div>
+        <div class="detail-stats">
+          <div class="stat">共 <b>${total}</b> 集</div>
+          <div class="stat">已下载 <b>${stats.done_episodes||0}</b></div>
+          ${stats.failed_episodes?'<div class="stat">失败 <b style="color:var(--red)">'+stats.failed_episodes+'</b></div>':''}
+          ${stats.total_size_mb?'<div class="stat">大小 <b>'+stats.total_size_mb+'</b> MB</div>':''}
+        </div>
+        <div class="detail-actions">
+          <button class="btn btn-primary" onclick="startDownload('${seriesId}')" ${inQueue?'disabled':''}>
+            ${inQueue?'⏳ 已在队列':'⬇️ 下载全集'}
+          </button>
+          <button class="btn btn-outline" onclick="cancelDownload('${seriesId}')">取消下载</button>
+        </div>
+      </div>
+    </div>`;
+
+    // 播放器区域
+    html += `<div class="player-section" id="playerSection" style="display:none">
+      <div class="player-container">
+        <video id="videoPlayer" controls playsinline></video>
+        <div class="player-title" id="playerTitle"></div>
+        <div class="player-nav">
+          <button class="btn btn-outline" id="prevEp" onclick="playEp(-1)">⏮ 上一集</button>
+          <button class="btn btn-outline" id="nextEp" onclick="playEp(1)">下一集 ⏭</button>
+        </div>
+      </div>
+    </div>`;
+
+    // 选集
+    html += `<div class="ep-section"><h3>选集 (点击播放)</h3><div class="ep-grid">`;
+    const epMap = {};
+    for (const e of eps) epMap[e.episode_num] = e.status;
+    for (let i = 1; i <= total; i++) {
+      const st = epMap[i] || 'pending';
+      const cls = st === 'done' ? 'done' : st === 'failed' ? 'failed' : st === 'downloading' ? 'downloading' : '';
+      html += `<div class="ep-btn ${cls}" id="ep${i}" onclick="playEpisode('${seriesId}',${i},${total})">${i}</div>`;
+    }
+    html += '</div></div>';
+
+    mc.innerHTML = html;
+    window._currentSeries = seriesId;
+    window._currentEp = 0;
+    window._totalEps = total;
+  } catch(e) {
+    mc.innerHTML = '<div class="empty" style="padding:60px"><div class="icon">😵</div>'+e.message+'</div><button class="modal-close" onclick="closeModal()">✕</button>';
+  }
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('show');
+  const v = document.getElementById('videoPlayer');
+  if (v) { v.pause(); v.src = ''; }
+}
+
+// ── 播放 ──
+let _currentSeries='', _currentEp=0, _totalEps=0;
+
+async function playEpisode(seriesId, epNum, total) {
+  _currentSeries = seriesId;
+  _currentEp = epNum;
+  _totalEps = total;
+
+  // 高亮
+  document.querySelectorAll('.ep-btn').forEach(b => b.classList.remove('playing'));
+  const btn = document.getElementById('ep'+epNum);
+  if (btn) btn.classList.add('playing');
+
+  const section = document.getElementById('playerSection');
+  section.style.display = 'block';
+  const video = document.getElementById('videoPlayer');
+  const title = document.getElementById('playerTitle');
+  title.textContent = `正在加载第 ${epNum} 集...`;
+  video.src = '';
+
+  // 设置视频源
+  video.src = API + `/api/play/${seriesId}/${epNum}`;
+  video.load();
+  try {
+    await video.play();
+  } catch(e) {}
+  title.textContent = `正在播放第 ${epNum} 集 / 共 ${total} 集`;
+
+  // 自动下一集
+  video.onended = () => {
+    if (_currentEp < _totalEps) playEpisode(seriesId, _currentEp + 1, total);
+  };
+
+  // 滚动到播放器
+  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function playEp(delta) {
+  const next = _currentEp + delta;
+  if (next >= 1 && next <= _totalEps) {
+    playEpisode(_currentSeries, next, _totalEps);
+  }
+}
+
+// ── 下载操作 ──
+async function startDownload(seriesId) {
+  try {
+    const res = await fetch(API+'/api/download/'+seriesId, {method:'POST'}).then(r=>r.json());
+    if (res.error) { alert('错误: '+res.error); return; }
+    alert(`✅ 《${res.name}》已加入下载队列\n共 ${res.episode_count} 集`);
+    openDetail(seriesId);  // 刷新
+  } catch(e) { alert('操作失败: '+e.message); }
+}
+
+async function cancelDownload(seriesId) {
+  if (!confirm('确认取消下载？')) return;
+  await fetch(API+'/api/download/'+seriesId, {method:'DELETE'});
+  openDetail(seriesId);
+}
+
+// ── 下载管理页 ──
+async function loadDownloads() {
+  const el = document.getElementById('content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const res = await fetch(API+'/api/downloads').then(r=>r.json());
+    let html = '<div class="section-title"><span class="icon">⬇️</span>下载管理</div>';
+
+    const queue = res.queue || [];
+    const history = res.history || [];
+
+    if (queue.length === 0 && history.length === 0) {
+      html += '<div class="empty"><div class="icon">📭</div>暂无下载任务<br><small>在首页或分类中选择短剧，点击"下载全集"开始</small></div>';
+    }
+
+    if (queue.length > 0) {
+      html += '<h3 style="margin:12px 0 8px;color:var(--orange)">📥 下载队列</h3>';
+      for (const item of queue) {
+        const total = item.episode_count || 1;
+        const done = item.done_count || 0;
+        const pct = Math.round(done / total * 100);
+        html += `<div class="dl-item" onclick="openDetail('${item.series_id}')" style="cursor:pointer">
+          <div class="name">${item.name || item.series_id}</div>
+          <div class="dl-progress">
+            <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+            <div class="progress-text">${done}/${total} 集 (${pct}%) ${item.downloading_count?' · 下载中 '+item.downloading_count:''}${item.failed_count?' · 失败 '+item.failed_count:''}</div>
+          </div>
+          <span class="status status-downloading">下载中</span>
+        </div>`;
+      }
+    }
+
+    if (history.length > 0) {
+      html += '<h3 style="margin:20px 0 8px">📋 下载记录</h3>';
+      for (const item of history) {
+        const stCls = item.status === 'done' ? 'done' : item.status === 'cancelled' ? 'failed' : 'downloading';
+        const stText = item.status === 'done' ? '已完成' : item.status === 'cancelled' ? '已取消' : '下载中';
+        html += `<div class="dl-item" onclick="openDetail('${item.series_id}')" style="cursor:pointer">
+          <div class="name">${item.name || item.series_id}</div>
+          <div style="font-size:12px;color:var(--text2)">${item.episode_count||'?'} 集</div>
+          <span class="status status-${stCls}">${stText}</span>
+        </div>`;
+      }
+    }
+
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = '<div class="empty"><div class="icon">😵</div>加载失败</div>';
+  }
+}
+
+// ── 自动刷新下载状态 ──
+setInterval(() => {
+  if (currentPage === 'downloads') loadDownloads();
+}, 15000);
+
+// ── 启动 ──
+showPage('home', document.querySelector('.nav button'));
+</script>
+</body>
+</html>
