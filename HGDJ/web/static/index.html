@@ -25,28 +25,38 @@ a{color:var(--accent2);text-decoration:none}
 .main{max-width:1400px;margin:0 auto;padding:16px}
 .section-title{font-size:18px;font-weight:bold;margin:16px 0 12px;display:flex;align-items:center;gap:8px}
 .section-title .icon{font-size:22px}
+.section-meta{font-size:13px;color:var(--text2);font-weight:normal;margin-left:auto}
 /* Grid */
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px}
 @media(min-width:768px){.grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}}
-.card{background:var(--card);border-radius:12px;overflow:hidden;cursor:pointer;transition:transform .2s,box-shadow .2s;position:relative}
-.card:hover{transform:translateY(-4px);box-shadow:0 8px 24px rgba(233,69,96,.15)}
-.card-img{width:100%;aspect-ratio:3/4;object-fit:cover;background:#222}
-.card-info{padding:10px}
-.card-title{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.card-meta{font-size:12px;color:var(--text2);margin-top:4px;display:flex;gap:6px;flex-wrap:wrap}
-.card-badge{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.7);color:var(--accent2);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+.card{background:var(--card);border-radius:12px;overflow:hidden;cursor:pointer;transition:transform .2s,box-shadow .2s;position:relative;display:flex;flex-direction:column}
+.card:hover{transform:translateY(-4px);box-shadow:0 8px 24px rgba(233,69,96,.18)}
+.card-cover{width:100%;aspect-ratio:3/4;position:relative;background:#1a1a2e;overflow:hidden}
+.card-img{width:100%;height:100%;object-fit:cover;display:block;background:#16213e}
+.card-info{padding:10px;flex:1;display:flex;flex-direction:column;justify-content:space-between}
+.card-title{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4}
+.card-meta{font-size:12px;color:var(--text2);margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
+.card-badge{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.75);color:var(--accent2);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;backdrop-filter:blur(4px)}
 .tag{background:var(--card2);padding:2px 8px;border-radius:8px;font-size:11px;color:var(--text2)}
+/* Pagination */
+.pagination{display:flex;justify-content:center;align-items:center;gap:6px;margin:32px 0;flex-wrap:wrap}
+.page-btn{background:var(--card);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;transition:.2s}
+.page-btn:hover{border-color:var(--accent);color:var(--accent)}
+.page-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:bold}
+.page-btn:disabled{opacity:.35;cursor:not-allowed}
+.page-info{color:var(--text2);font-size:13px;margin:0 8px}
 /* Detail modal */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;display:none;justify-content:center;align-items:flex-start;padding:40px 16px;overflow-y:auto}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:200;display:none;justify-content:center;align-items:flex-start;padding:40px 16px;overflow-y:auto}
 .modal-overlay.show{display:flex}
-.modal{background:var(--card);border-radius:16px;max-width:900px;width:100%;max-height:90vh;overflow-y:auto;position:relative}
-.modal-close{position:absolute;top:12px;right:16px;background:rgba(0,0,0,.5);border:none;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:20px;z-index:10}
+.modal{background:var(--card);border-radius:16px;max-width:920px;width:100%;max-height:90vh;overflow-y:auto;position:relative;box-shadow:0 12px 40px rgba(0,0,0,.8)}
+.modal-close{position:absolute;top:12px;right:16px;background:rgba(0,0,0,.5);border:none;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:20px;z-index:10;display:flex;align-items:center;justify-content:center}
+.modal-close:hover{background:var(--accent)}
 .detail-header{display:flex;gap:20px;padding:24px;flex-wrap:wrap}
-.detail-poster{width:200px;flex-shrink:0;border-radius:12px;overflow:hidden}
-.detail-poster img{width:100%;aspect-ratio:3/4;object-fit:cover}
-.detail-info{flex:1;min-width:200px}
-.detail-info h2{font-size:22px;margin-bottom:8px}
-.detail-info .intro{color:var(--text2);font-size:13px;line-height:1.6;max-height:100px;overflow:hidden;margin:8px 0}
+.detail-poster{width:200px;flex-shrink:0;border-radius:12px;overflow:hidden;background:#16213e;aspect-ratio:3/4}
+.detail-poster img{width:100%;height:100%;object-fit:cover;display:block}
+.detail-info{flex:1;min-width:220px}
+.detail-info h2{font-size:22px;margin-bottom:8px;line-height:1.3}
+.detail-info .intro{color:var(--text2);font-size:13px;line-height:1.6;max-height:110px;overflow-y:auto;margin:8px 0;padding-right:4px}
 .detail-stats{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
 .stat{background:var(--input-bg);padding:6px 14px;border-radius:8px;font-size:13px}
 .stat b{color:var(--accent2)}
@@ -60,25 +70,25 @@ a{color:var(--accent2);text-decoration:none}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 /* Episode list */
 .ep-section{padding:0 24px 24px}
-.ep-section h3{font-size:16px;margin-bottom:12px}
-.ep-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:8px}
+.ep-section h3{font-size:16px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.ep-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:8px;max-height:360px;overflow-y:auto;padding-right:4px}
 .ep-btn{padding:10px 4px;text-align:center;border-radius:8px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);cursor:pointer;font-size:13px;transition:.2s}
 .ep-btn:hover{border-color:var(--accent);color:var(--accent)}
 .ep-btn.done{border-color:var(--green);color:var(--green)}
 .ep-btn.failed{border-color:var(--red);color:var(--red)}
 .ep-btn.downloading{border-color:var(--orange);color:var(--orange);animation:pulse 1.5s infinite}
-.ep-btn.playing{background:var(--accent);color:#fff;border-color:var(--accent)}
+.ep-btn.playing{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:bold}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 /* Player */
 .player-section{padding:0 24px 24px}
 .player-container{background:#000;border-radius:12px;overflow:hidden;position:relative}
 .player-container video{width:100%;max-height:60vh;display:block}
-.player-title{padding:12px;font-size:14px;color:var(--text2)}
+.player-title{padding:12px;font-size:14px;color:var(--text2);display:flex;justify-content:space-between;align-items:center}
 .player-nav{display:flex;gap:10px;padding:0 12px 12px}
 /* Downloads page */
 .dl-item{background:var(--card);border-radius:12px;padding:16px;margin-bottom:12px;display:flex;gap:16px;align-items:center}
 .dl-item .name{flex:1;font-weight:600}
-.dl-progress{width:200px}
+.dl-progress{width:220px}
 .progress-bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden}
 .progress-fill{height:100%;background:var(--green);border-radius:3px;transition:width .3s}
 .progress-text{font-size:11px;color:var(--text2);margin-top:4px}
@@ -88,20 +98,23 @@ a{color:var(--accent2);text-decoration:none}
 .status-downloading{background:rgba(255,152,0,.15);color:var(--orange)}
 .status-failed{background:rgba(233,69,96,.15);color:var(--red)}
 .status-pending{background:rgba(170,170,170,.1);color:var(--text2)}
-/* Loading */
-.loading{text-align:center;padding:40px;color:var(--text2)}
+/* Loading & Empty */
+.loading{text-align:center;padding:60px 20px;color:var(--text2)}
 .spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-/* Empty */
-.empty{text-align:center;padding:60px 20px;color:var(--text2)}
+.empty{text-align:center;padding:80px 20px;color:var(--text2)}
 .empty .icon{font-size:48px;margin-bottom:12px}
 /* Responsive */
 @media(max-width:640px){
   .header{flex-wrap:wrap;gap:10px}
-  .nav{overflow-x:auto;width:100%}
-  .detail-header{flex-direction:column}
-  .detail-poster{width:140px}
+  .nav{overflow-x:auto;width:100%;padding-bottom:4px}
+  .detail-header{flex-direction:column;align-items:center;text-align:center}
+  .detail-poster{width:160px}
+  .detail-stats{justify-content:center}
+  .detail-actions{justify-content:center}
   .grid{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+  .dl-item{flex-direction:column;align-items:flex-start;gap:10px}
+  .dl-progress{width:100%}
 }
 </style>
 </head>
@@ -109,7 +122,7 @@ a{color:var(--accent2);text-decoration:none}
 <div class="header">
   <div class="logo">🍎 <span>红果下载</span></div>
   <div class="search-box">
-    <input id="searchInput" placeholder="搜索短剧名称..." onkeydown="if(event.key==='Enter')doSearch()">
+    <input id="searchInput" placeholder="搜索短剧名称（回车搜索）..." onkeydown="if(event.key==='Enter')doSearch()">
     <button onclick="doSearch()">🔍</button>
   </div>
   <div class="nav">
@@ -133,6 +146,10 @@ a{color:var(--accent2);text-decoration:none}
 <script>
 const API = '';
 let currentPage = 'home';
+let currentCategory = 'real-drama';
+let currentCategoryPage = 1;
+
+const DEFAULT_COVER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 400'><rect width='300' height='400' fill='%2316213e'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-size='48'>🎬</text></svg>";
 
 // ── 页面导航 ──
 function showPage(page, btn) {
@@ -141,7 +158,7 @@ function showPage(page, btn) {
   if (btn) btn.classList.add('active');
   if (page === 'home') loadHome();
   else if (page === 'downloads') loadDownloads();
-  else loadCategory(page);
+  else loadCategory(page, 1);
 }
 
 // ── 首页 ──
@@ -154,7 +171,6 @@ async function loadHome() {
       fetch(API+'/api/recommend').then(r=>r.json()),
     ]);
     let html = '';
-    // 统计
     const d = dashRes;
     html += `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
       <div class="stat">已收录 <b>${d.total_series||0}</b> 部</div>
@@ -162,8 +178,10 @@ async function loadHome() {
       <div class="stat">下载中 <b>${d.downloading_episodes||0}</b> 集</div>
       <div class="stat">总大小 <b>${d.total_size_mb||0}</b> MB</div>
     </div>`;
-    // 推荐
-    html += '<div class="section-title"><span class="icon">🔥</span>热门推荐</div>';
+    html += `<div class="section-title">
+      <span class="icon">🔥</span>热门推荐
+      <span class="section-meta">精选热播短剧</span>
+    </div>`;
     html += renderGrid(recRes.items || []);
     el.innerHTML = html;
   } catch(e) {
@@ -171,21 +189,63 @@ async function loadHome() {
   }
 }
 
-// ── 分类 ──
-async function loadCategory(cat) {
+// ── 分类浏览（带分页） ──
+async function loadCategory(cat, page = 1) {
+  currentCategory = cat;
+  currentCategoryPage = page;
   const el = document.getElementById('content');
   el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try {
-    const res = await fetch(API+'/api/browse?category='+cat).then(r=>r.json());
-    let html = '<div class="section-title"><span class="icon">📂</span>' +
-      {'real-drama':'真人剧','comic-drama':'漫剧','ai-drama':'AI剧','comic':'漫画'}[cat] + '</div>';
+    const res = await fetch(API+`/api/browse?category=${cat}&page=${page}`).then(r=>r.json());
+    const catName = {'real-drama':'真人剧','comic-drama':'漫剧','ai-drama':'AI剧','comic':'漫画'}[cat] || cat;
+    const pg = res.pagination || {pageNum: page, totalPages: 1, total: 0};
+
+    let html = `<div class="section-title">
+      <span class="icon">📂</span>${catName}
+      <span class="section-meta">共 ${pg.total || res.items?.length || 0} 部短剧（第 ${pg.pageNum} / ${pg.totalPages} 页）</span>
+    </div>`;
+
     html += renderGrid(res.items || []);
-    if (!res.items || res.items.length === 0)
+
+    if (!res.items || res.items.length === 0) {
       html += '<div class="empty"><div class="icon">📭</div>暂无数据</div>';
+    } else if (pg.totalPages > 1) {
+      html += renderPagination(cat, pg.pageNum, pg.totalPages);
+    }
+
     el.innerHTML = html;
+    window.scrollTo({top: 0, behavior: 'smooth'});
   } catch(e) {
     el.innerHTML = '<div class="empty"><div class="icon">😵</div>加载失败</div>';
   }
+}
+
+// ── 分页组件 ──
+function renderPagination(cat, current, total) {
+  let html = '<div class="pagination">';
+  html += `<button class="page-btn" onclick="loadCategory('${cat}', ${current - 1})" ${current <= 1 ? 'disabled' : ''}>◀ 上一页</button>`;
+
+  const pages = [];
+  pages.push(1);
+  for (let i = Math.max(2, current - 2); i <= Math.min(total - 1, current + 2); i++) {
+    pages.push(i);
+  }
+  if (total > 1) pages.push(total);
+
+  const uniquePages = [...new Set(pages)].sort((a,b)=>a-b);
+  let prev = 0;
+  for (const p of uniquePages) {
+    if (prev && p - prev > 1) {
+      html += '<span class="page-info">...</span>';
+    }
+    html += `<button class="page-btn ${p === current ? 'active' : ''}" onclick="loadCategory('${cat}', ${p})">${p}</button>`;
+    prev = p;
+  }
+
+  html += `<button class="page-btn" onclick="loadCategory('${cat}', ${current + 1})" ${current >= total ? 'disabled' : ''}>下一页 ▶</button>`;
+  html += `<span class="page-info">跳转到: <input type="number" min="1" max="${total}" value="${current}" style="width:50px;padding:4px;border-radius:4px;background:var(--input-bg);color:#fff;border:1px solid var(--border);text-align:center" onkeydown="if(event.key==='Enter'){const v=parseInt(this.value);if(v>=1&&v<=${total})loadCategory('${cat}',v)}"></span>`;
+  html += '</div>';
+  return html;
 }
 
 // ── 搜索 ──
@@ -197,19 +257,22 @@ async function doSearch() {
   document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
   try {
     const res = await fetch(API+'/api/search?q='+encodeURIComponent(q)).then(r=>r.json());
-    let html = '<div class="section-title"><span class="icon">🔍</span>搜索: "'+q+'"</div>';
+    let html = `<div class="section-title">
+      <span class="icon">🔍</span>搜索: "${q}"
+      <span class="section-meta">找到 ${res.items?.length||0} 部匹配短剧</span>
+    </div>`;
     if (res.items && res.items.length > 0) {
       html += renderGrid(res.items);
     } else {
-      html += '<div class="empty"><div class="icon">📭</div>未找到相关短剧<br><small style="color:#666">提示：搜索功能依赖网页端，部分剧名可能搜不到</small></div>';
+      html += '<div class="empty"><div class="icon">📭</div>未找到相关短剧<br><small style="color:#666">请尝试输入短剧全名或关键词重新搜索</small></div>';
     }
     el.innerHTML = html;
   } catch(e) {
-    el.innerHTML = '<div class="empty"><div class="icon">😵</div>搜索失败</div>';
+    el.innerHTML = '<div class="empty"><div class="icon">😵</div>搜索失败: '+e.message+'</div>';
   }
 }
 
-// ── 渲染卡片网格 ──
+// ── 渲染卡片网格（单层海报容器，绝无多层黑块） ──
 function renderGrid(items) {
   if (!items || items.length === 0) return '';
   let html = '<div class="grid">';
@@ -219,11 +282,12 @@ function renderGrid(items) {
     const cover = item.series_cover || '';
     const eps = item.episode_right_text || (item.episode_cnt ? `全${item.episode_cnt}集` : '');
     const tags = Array.isArray(item.tags) ? item.tags.slice(0, 3) : [];
-    const imgSrc = cover ? cover.replace('~tplv-shrink:640:0', '~tplv-shrink:300:0') : '';
+    const imgSrc = cover || DEFAULT_COVER;
     html += `<div class="card" onclick="openDetail('${sid}')">
-      ${imgSrc ? `<img class="card-img" src="${imgSrc}" alt="${name}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">` : ''}
-      <div class="card-img" style="${imgSrc ? 'display:none;' : ''}display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1e1e38,#2d1f3d);font-size:28px;">🎬</div>
-      ${eps ? `<div class="card-badge">${eps}</div>` : ''}
+      <div class="card-cover">
+        <img class="card-img" src="${imgSrc}" alt="${name}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'">
+        ${eps ? `<div class="card-badge">${eps}</div>` : ''}
+      </div>
       <div class="card-info">
         <div class="card-title" title="${name}">${name}</div>
         <div class="card-meta">${tags.map(t=>'<span class="tag">'+t+'</span>').join('')}</div>
@@ -248,15 +312,14 @@ async function openDetail(seriesId) {
     const stats = res.stats || {};
     const inQueue = res.in_queue;
     const name = d.series_name || d.series_title || '';
-    const cover = d.series_cover || '';
-    const intro = d.series_intro || '';
+    const cover = d.series_cover || DEFAULT_COVER;
+    const intro = d.series_intro || '暂无简介';
     const tags = Array.isArray(d.tags) ? d.tags : [];
     const total = d.episode_cnt || d.vid_list?.length || 0;
-    const vidList = d.vid_list || [];
 
     let html = `<button class="modal-close" onclick="closeModal()">✕</button>`;
     html += `<div class="detail-header">
-      <div class="detail-poster"><img src="${cover}" alt="${name}" referrerpolicy="no-referrer" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'200\\' height=\\'260\\' fill=\\'%23222\\'><rect width=\\'100%25\\' height=\\'100%25\\'/></svg>'"></div>
+      <div class="detail-poster"><img src="${cover}" alt="${name}" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='${DEFAULT_COVER}'"></div>
       <div class="detail-info">
         <h2>${name}</h2>
         <div class="card-meta" style="margin:8px 0">${tags.map(t=>'<span class="tag">'+t+'</span>').join('')}</div>
@@ -269,7 +332,7 @@ async function openDetail(seriesId) {
         </div>
         <div class="detail-actions">
           <button class="btn btn-primary" onclick="startDownload('${seriesId}')" ${inQueue?'disabled':''}>
-            ${inQueue?'⏳ 已在队列':'⬇️ 下载全集'}
+            ${inQueue?'⏳ 已在下载队列':'⬇️ 下载全集'}
           </button>
           <button class="btn btn-outline" onclick="cancelDownload('${seriesId}')">取消下载</button>
         </div>
@@ -280,16 +343,21 @@ async function openDetail(seriesId) {
     html += `<div class="player-section" id="playerSection" style="display:none">
       <div class="player-container">
         <video id="videoPlayer" controls playsinline></video>
-        <div class="player-title" id="playerTitle"></div>
+        <div class="player-title">
+          <span id="playerTitle"></span>
+          <span style="font-size:12px;color:var(--text2)">CENC 实时解密推流</span>
+        </div>
         <div class="player-nav">
-          <button class="btn btn-outline" id="prevEp" onclick="playEp(-1)">⏮ 上一集</button>
-          <button class="btn btn-outline" id="nextEp" onclick="playEp(1)">下一集 ⏭</button>
+          <button class="btn btn-outline" onclick="playEp(-1)">⏮ 上一集</button>
+          <button class="btn btn-outline" onclick="playEp(1)">下一集 ⏭</button>
         </div>
       </div>
     </div>`;
 
     // 选集
-    html += `<div class="ep-section"><h3>选集 (点击播放)</h3><div class="ep-grid">`;
+    html += `<div class="ep-section">
+      <h3><span>选集播放</span> <small style="font-size:12px;color:var(--text2);font-weight:normal">（点击任意集数实时解密播放）</small></h3>
+      <div class="ep-grid">`;
     const epMap = {};
     for (const e of eps) epMap[e.episode_num] = e.status;
     for (let i = 1; i <= total; i++) {
@@ -322,7 +390,6 @@ async function playEpisode(seriesId, epNum, total) {
   _currentEp = epNum;
   _totalEps = total;
 
-  // 高亮
   document.querySelectorAll('.ep-btn').forEach(b => b.classList.remove('playing'));
   const btn = document.getElementById('ep'+epNum);
   if (btn) btn.classList.add('playing');
@@ -331,10 +398,9 @@ async function playEpisode(seriesId, epNum, total) {
   section.style.display = 'block';
   const video = document.getElementById('videoPlayer');
   const title = document.getElementById('playerTitle');
-  title.textContent = `正在加载第 ${epNum} 集...`;
+  title.textContent = `正在加载第 ${epNum} 集（实时解密）...`;
   video.src = '';
 
-  // 设置视频源
   video.src = API + `/api/play/${seriesId}/${epNum}`;
   video.load();
   try {
@@ -342,12 +408,10 @@ async function playEpisode(seriesId, epNum, total) {
   } catch(e) {}
   title.textContent = `正在播放第 ${epNum} 集 / 共 ${total} 集`;
 
-  // 自动下一集
   video.onended = () => {
     if (_currentEp < _totalEps) playEpisode(seriesId, _currentEp + 1, total);
   };
 
-  // 滚动到播放器
   section.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -364,7 +428,7 @@ async function startDownload(seriesId) {
     const res = await fetch(API+'/api/download/'+seriesId, {method:'POST'}).then(r=>r.json());
     if (res.error) { alert('错误: '+res.error); return; }
     alert(`✅ 《${res.name}》已加入下载队列\n共 ${res.episode_count} 集`);
-    openDetail(seriesId);  // 刷新
+    openDetail(seriesId);
   } catch(e) { alert('操作失败: '+e.message); }
 }
 
@@ -380,17 +444,20 @@ async function loadDownloads() {
   el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try {
     const res = await fetch(API+'/api/downloads').then(r=>r.json());
-    let html = '<div class="section-title"><span class="icon">⬇️</span>下载管理</div>';
+    let html = `<div class="section-title">
+      <span class="icon">⬇️</span>下载管理
+      <span class="section-meta">只下载用户手动添加的任务</span>
+    </div>`;
 
     const queue = res.queue || [];
     const history = res.history || [];
 
     if (queue.length === 0 && history.length === 0) {
-      html += '<div class="empty"><div class="icon">📭</div>暂无下载任务<br><small>在首页或分类中选择短剧，点击"下载全集"开始</small></div>';
+      html += '<div class="empty"><div class="icon">📭</div>暂无下载任务<br><small style="color:#666">在首页或分类中选择短剧，点击"下载全集"开始</small></div>';
     }
 
     if (queue.length > 0) {
-      html += '<h3 style="margin:12px 0 8px;color:var(--orange)">📥 下载队列</h3>';
+      html += '<h3 style="margin:16px 0 10px;color:var(--orange)">📥 当前正在下载的队列</h3>';
       for (const item of queue) {
         const total = item.episode_count || 1;
         const done = item.done_count || 0;
@@ -407,7 +474,7 @@ async function loadDownloads() {
     }
 
     if (history.length > 0) {
-      html += '<h3 style="margin:20px 0 8px">📋 下载记录</h3>';
+      html += '<h3 style="margin:24px 0 10px">📋 历史与已入库任务</h3>';
       for (const item of history) {
         const stCls = item.status === 'done' ? 'done' : item.status === 'cancelled' ? 'failed' : 'downloading';
         const stText = item.status === 'done' ? '已完成' : item.status === 'cancelled' ? '已取消' : '下载中';
@@ -425,12 +492,12 @@ async function loadDownloads() {
   }
 }
 
-// ── 自动刷新下载状态 ──
+// 自动刷新
 setInterval(() => {
   if (currentPage === 'downloads') loadDownloads();
 }, 15000);
 
-// ── 启动 ──
+// 启动默认页
 showPage('home', document.querySelector('.nav button'));
 </script>
 </body>

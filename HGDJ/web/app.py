@@ -71,8 +71,13 @@ def create_app() -> FastAPI:
     @app.get('/api/browse')
     async def browse(category: str = 'real-drama', page: int = 1):
         try:
-            items = web_get_category(category, page)
-            return {'items': items, 'category': category, 'page': page}
+            data = web_get_category(category, max(1, page))
+            return {
+                'items': data.get('items', []),
+                'pagination': data.get('pagination', {}),
+                'category': category,
+                'page': page,
+            }
         except Exception as e:
             return JSONResponse({'error': str(e)}, 500)
 

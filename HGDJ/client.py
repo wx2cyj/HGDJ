@@ -322,8 +322,8 @@ def web_get_homepage() -> list[dict]:
     return results
 
 
-def web_get_category(category: str, page: int = 1) -> list[dict]:
-    """从网页端获取分类列表"""
+def web_get_category(category: str, page: int = 1) -> dict:
+    """从网页端获取分类列表与分页信息"""
     import re
     path_map = {
         'real-drama': '/category/real-drama',
@@ -331,16 +331,20 @@ def web_get_category(category: str, page: int = 1) -> list[dict]:
         'ai-drama': '/category/ai-drama',
         'comic': '/category/comic',
     }
-    path = path_map.get(category, f'/category/{category}')
+    base_path = path_map.get(category, f'/category/{category}')
+    path = f'{base_path}?page={page}' if page > 1 else base_path
     raw_html = web_fetch(path)
     m = re.search(r'_ROUTER_DATA\s*=\s*(\{.*?\});', raw_html, re.DOTALL)
     results = []
+    pagination = {'total': 0, 'pageNum': page, 'pageSize': 24, 'totalPages': 1}
     seen = set()
     if m:
         try:
             data = json.loads(m.group(1))
             loader = data.get('loaderData', {})
             cat_page = loader.get('category_$', {})
+            if 'pagination' in cat_page and isinstance(cat_page['pagination'], dict):
+                pagination = cat_page['pagination']
             items = cat_page.get('recommendList', [])
             for raw_item in items:
                 item = _normalize_drama(raw_item)
@@ -350,7 +354,7 @@ def web_get_category(category: str, page: int = 1) -> list[dict]:
         except Exception as e:
             LOG.warning('解析分类列表异常: %s', e)
 
-    return results
+    return {'items': results, 'pagination': pagination}
 
 
 def web_search(keyword: str) -> list[dict]:
