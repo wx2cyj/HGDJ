@@ -113,11 +113,13 @@ def create_app() -> FastAPI:
             episodes = _state_db.get_episodes(series_id) if _state_db else []
             in_queue = _state_db.is_in_queue(series_id) if _state_db else False
             ep_stats = _state_db.episode_stats(series_id) if _state_db else {}
+            history = _state_db.get_series_history(series_id) if _state_db else None
             return {
                 'detail': sd,
                 'episodes': episodes,
                 'in_queue': in_queue,
                 'stats': ep_stats,
+                'history': history,
             }
         except Exception as e:
             return JSONResponse({'error': str(e)}, 500)
@@ -263,5 +265,48 @@ def create_app() -> FastAPI:
         all_series = _state_db.list_series()
         downloading = [s for s in all_series if s['status'] in ('downloading', 'done', 'cancelled')]
         return {'queue': queue, 'history': downloading[:50]}
+
+    # ── 观看历史 ──
+    @app.get('/api/history')
+    async def get_history():
+        if not _state_db:
+            return JSONResponse({'error': 'not ready'}, 503)
+        return {'items': _state_db.get_history(limit=60)}
+
+    @app.post('/api/history')
+    async def save_history(request: Request):
+        if not _state_db:
+            return JSONResponse({'error': 'not ready'}, 503)
+        try:
+            body = await request.json()
+            series_id = str(body.get('series_id', '')).strip()
+            if not series_id:
+                return JSONResponse({'error': '缺少 series_id'}, 400)
+            _state_db.upsert_history(
+                series_id=series_id,
+                series_name=str(body.get('series_name', '')),
+                series_cover=str(body.get('series_cover', '')),
+                episode_num=int(body.get('episode_num', 1)),
+                total_episodes=int(body.get('total_episodes', 1)),
+                current_time=float(body.get('current_time', 0.0)),
+                duration=float(body.get('duration', 0.0)),
+            )
+            return {'ok': True}
+        except Exception as e:
+            return JSONResponse({'error': str(e)}, 500)
+
+    @app.delete('/api/history/{series_id}')
+    async def delete_history_item(series_id: str):
+        if not _state_db:
+            return JSONResponse({'error': 'not ready'}, 503)
+        _state_db.delete_history(series_id)
+        return {'ok': True}
+
+    @app.delete('/api/history')
+    async def clear_all_history():
+        if not _state_db:
+            return JSONResponse({'error': 'not ready'}, 503)
+        _state_db.delete_history()
+        return {'ok': True}
 
     return app

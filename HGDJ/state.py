@@ -60,8 +60,19 @@ class StateDB:
                 added_at TEXT DEFAULT (datetime('now')),
                 FOREIGN KEY (series_id) REFERENCES series(series_id)
             );
+            CREATE TABLE IF NOT EXISTS watch_history (
+                series_id TEXT PRIMARY KEY,
+                series_name TEXT NOT NULL DEFAULT '',
+                series_cover TEXT DEFAULT '',
+                episode_num INTEGER NOT NULL DEFAULT 1,
+                total_episodes INTEGER NOT NULL DEFAULT 1,
+                current_time REAL NOT NULL DEFAULT 0,
+                duration REAL NOT NULL DEFAULT 0,
+                updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+            );
             CREATE INDEX IF NOT EXISTS idx_episodes_status ON episodes(status);
             CREATE INDEX IF NOT EXISTS idx_series_status ON series(status);
+            CREATE INDEX IF NOT EXISTS idx_history_updated ON watch_history(updated_at);
         ''')
         self._conn.commit()
 
@@ -228,3 +239,42 @@ class StateDB:
             'total_episodes': total, 'done_episodes': done,
             'failed_episodes': failed, 'total_size_mb': round(size / 1048576, 1),
         }
+
+    # ── 观看历史 ──
+
+    def upsert_history(self, series_id: str, series_name: str = '', series_cover: str = '',
+                       episode_num: int = 1, total_episodes: int = 1,
+                       current_time: float = 0.0, duration: float = 0.0) -> None:
+        self._conn.execute('''
+            INSERT INTO watch_history (series_id, series_name, series_cover, episode_num, total_episodes, current_time, duration, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+            ON CONFLICT(series_id) DO UPDATE SET
+                series_name=CASE WHEN excluded.series_name != '' THEN excluded.series_name ELSE watch_history.series_name END,
+                series_cover=CASE WHEN excluded.series_cover != '' THEN excluded.series_cover ELSE watch_history.series_cover END,
+                episode_num=excluded.episode_num,
+                total_episodes=CASE WHEN excluded.total_episodes > 0 THEN excluded.total_episodes ELSE watch_history.total_episodes END,
+                current_time=excluded.current_time,
+                duration=CASE WHEN excluded.duration > 0 THEN excluded.duration ELSE watch_history.duration END,
+                updated_at=datetime('now', 'localtime')
+        ''', (series_id, series_name, series_cover, episode_num, total_episodes, current_time, duration))
+        self._conn.commit()
+
+    def get_history(self, limit: int = 60) -> list[dict]:
+        rows = self._conn.execute(
+            'SELECT * FROM watch_history ORDER BY updated_at DESC LIMIT ?',
+            (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_series_history(self, series_id: str) -> dict | None:
+        row = self._conn.execute(
+            'SELECT * FROM watch_history WHERE series_id=?',
+            (series_id,)).fetchone()
+        return dict(row) if row else None
+
+    def delete_history(self, series_id: str | None = None) -> None:
+        if series_id:
+            self._conn.execute('DELETE FROM watch_history WHERE series_id=?', (series_id,))
+        else:
+            self._conn.execute('DELETE FROM watch_history')
+        self._conn.commit()
+

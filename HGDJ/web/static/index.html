@@ -106,6 +106,20 @@ a{color:var(--accent2);text-decoration:none}
 @keyframes spin{to{transform:rotate(360deg)}}
 .empty{text-align:center;padding:80px 20px;color:var(--text2)}
 .empty .icon{font-size:48px;margin-bottom:12px}
+/* History */
+.history-list{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+.history-item{background:var(--card);border-radius:12px;padding:14px;display:flex;gap:16px;align-items:center;cursor:pointer;transition:transform .2s,box-shadow .2s;border:1px solid transparent}
+.history-item:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.4);border-color:var(--border)}
+.history-cover{width:84px;aspect-ratio:3/4;border-radius:8px;overflow:hidden;flex-shrink:0;background:#16213e;position:relative}
+.history-cover img{width:100%;height:100%;object-fit:cover;display:block}
+.history-badge{position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,.8);color:var(--accent2);padding:2px 6px;border-radius:6px;font-size:10px;font-weight:600}
+.history-info{flex:1;min-width:0}
+.history-title{font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:6px}
+.history-meta{font-size:13px;color:var(--text2);display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.history-progress{width:100%;max-width:360px;height:6px;background:var(--input-bg);border-radius:3px;overflow:hidden;margin-top:8px}
+.history-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:3px}
+.history-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.ep-btn.last-watched{border-color:var(--accent2);color:var(--accent2);box-shadow:0 0 8px rgba(255,107,107,.4);font-weight:bold}
 /* Responsive */
 @media(max-width:640px){
   .header{flex-wrap:wrap;gap:10px}
@@ -117,6 +131,8 @@ a{color:var(--accent2);text-decoration:none}
   .grid{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
   .dl-item{flex-direction:column;align-items:flex-start;gap:10px}
   .dl-progress{width:100%}
+  .history-item{flex-direction:column;align-items:flex-start;gap:10px}
+  .history-actions{width:100%;justify-content:space-between}
 }
 </style>
 </head>
@@ -132,6 +148,7 @@ a{color:var(--accent2);text-decoration:none}
     <button onclick="showPage('real-drama',this)">真人剧</button>
     <button onclick="showPage('comic-drama',this)">漫剧</button>
     <button onclick="showPage('ai-drama',this)">AI剧</button>
+    <button onclick="showPage('history',this)">最近观看</button>
     <button onclick="showPage('downloads',this)">下载管理</button>
   </div>
 </div>
@@ -159,6 +176,7 @@ function showPage(page, btn) {
   document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   if (page === 'home') loadHome();
+  else if (page === 'history') loadHistory();
   else if (page === 'downloads') loadDownloads();
   else loadCategory(page, 1);
 }
@@ -313,11 +331,15 @@ async function openDetail(seriesId) {
     const eps = res.episodes || [];
     const stats = res.stats || {};
     const inQueue = res.in_queue;
+    const hist = res.history;
     const name = d.series_name || d.series_title || '';
     const cover = d.series_cover || DEFAULT_COVER;
     const intro = d.series_intro || '暂无简介';
     const tags = Array.isArray(d.tags) ? d.tags : [];
     const total = d.episode_cnt || d.vid_list?.length || 0;
+
+    window._currentSeriesName = name;
+    window._currentSeriesCover = cover;
 
     let html = `<button class="modal-close" onclick="closeModal()">✕</button>`;
     html += `<div class="detail-header">
@@ -333,6 +355,11 @@ async function openDetail(seriesId) {
           ${stats.total_size_mb?'<div class="stat">大小 <b>'+stats.total_size_mb+'</b> MB</div>':''}
         </div>
         <div class="detail-actions">
+          ${hist ? `
+            <button class="btn btn-success" onclick="playEpisode('${seriesId}', ${hist.episode_num}, ${total}, ${hist.current_time})">
+              ▶ 继续播放：第 ${hist.episode_num} 集 (${formatTime(hist.current_time)})
+            </button>
+          ` : ''}
           <button class="btn btn-primary" onclick="startDownload('${seriesId}')" ${inQueue?'disabled':''}>
             ${inQueue?'⏳ 已在下载队列':'⬇️ 下载全集'}
           </button>
@@ -365,7 +392,9 @@ async function openDetail(seriesId) {
     for (const e of eps) epMap[e.episode_num] = e.status;
     for (let i = 1; i <= total; i++) {
       const st = epMap[i] || 'pending';
-      const cls = st === 'done' ? 'done' : st === 'failed' ? 'failed' : st === 'downloading' ? 'downloading' : '';
+      const isLastWatched = hist && hist.episode_num === i;
+      let cls = st === 'done' ? 'done' : st === 'failed' ? 'failed' : st === 'downloading' ? 'downloading' : '';
+      if (isLastWatched) cls += ' last-watched';
       html += `<div class="ep-btn ${cls}" id="ep${i}" onclick="playEpisode('${seriesId}',${i},${total})">${i}</div>`;
     }
     html += '</div></div>';
@@ -380,6 +409,7 @@ async function openDetail(seriesId) {
 }
 
 function closeModal() {
+  saveCurrentProgress();
   document.getElementById('modal').classList.remove('show');
   const v = document.getElementById('videoPlayer');
   if (v) { v.pause(); v.src = ''; }
@@ -387,11 +417,13 @@ function closeModal() {
 
 // ── 播放 ──
 let _currentSeries='', _currentEp=0, _totalEps=0;
+let _lastSaveTime = 0;
 
-async function playEpisode(seriesId, epNum, total) {
+async function playEpisode(seriesId, epNum, total, seekTime = 0) {
   _currentSeries = seriesId;
   _currentEp = epNum;
   _totalEps = total;
+  _lastSaveTime = 0;
 
   document.querySelectorAll('.ep-btn').forEach(b => b.classList.remove('playing'));
   const btn = document.getElementById('ep'+epNum);
@@ -404,6 +436,23 @@ async function playEpisode(seriesId, epNum, total) {
   title.textContent = `正在加载第 ${epNum} 集（实时解密）...`;
   video.src = '';
 
+  // 恢复进度控制
+  if (seekTime > 0) {
+    let seekApplied = false;
+    const applySeek = () => {
+      if (!seekApplied && video.duration && !isNaN(video.duration)) {
+        seekApplied = true;
+        video.currentTime = Math.min(seekTime, Math.max(0, video.duration - 1));
+        showPlayerTip(`已恢复至 ${formatTime(video.currentTime)}`);
+      }
+    };
+    video.onloadedmetadata = applySeek;
+    video.oncanplay = applySeek;
+  } else {
+    video.onloadedmetadata = null;
+    video.oncanplay = null;
+  }
+
   video.src = API + `/api/play/${seriesId}/${epNum}`;
   video.load();
   try {
@@ -411,11 +460,50 @@ async function playEpisode(seriesId, epNum, total) {
   } catch(e) {}
   title.textContent = `正在播放第 ${epNum} 集 / 共 ${total} 集`;
 
+  // 播放进度追踪与自动连播
+  video.ontimeupdate = () => {
+    const now = Date.now();
+    if (now - _lastSaveTime > 4000) {
+      _lastSaveTime = now;
+      saveCurrentProgress();
+    }
+  };
+
+  video.onpause = () => {
+    saveCurrentProgress();
+  };
+
   video.onended = () => {
-    if (_currentEp < _totalEps) playEpisode(seriesId, _currentEp + 1, total);
+    saveCurrentProgress(true);
+    if (_currentEp < _totalEps) {
+      playEpisode(seriesId, _currentEp + 1, total);
+    }
   };
 
   section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function saveCurrentProgress(isEnded = false) {
+  if (!_currentSeries || !_currentEp) return;
+  const video = document.getElementById('videoPlayer');
+  if (!video) return;
+  const cur = isEnded ? 0 : (video.currentTime || 0);
+  const dur = video.duration || 0;
+  const epNum = (isEnded && _currentEp < _totalEps) ? (_currentEp + 1) : _currentEp;
+
+  fetch(API + '/api/history', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      series_id: _currentSeries,
+      series_name: window._currentSeriesName || '',
+      series_cover: window._currentSeriesCover || '',
+      episode_num: epNum,
+      total_episodes: _totalEps || 1,
+      current_time: Math.round(cur),
+      duration: Math.round(dur),
+    })
+  }).catch(() => {});
 }
 
 function playEp(delta) {
@@ -561,9 +649,98 @@ async function loadDownloads() {
   }
 }
 
+// ── 最近观看页面 ──
+async function loadHistory() {
+  const el = document.getElementById('content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const res = await fetch(API + '/api/history').then(r => r.json());
+    const items = res.items || [];
+
+    let html = `<div class="section-title">
+      <span class="icon">🕒</span>最近观看
+      <span class="section-meta">共 ${items.length} 部短剧观看记录</span>
+      ${items.length > 0 ? `<button class="btn btn-outline" style="margin-left:auto;padding:6px 14px;font-size:12px" onclick="clearAllHistory()">清空全部记录</button>` : ''}
+    </div>`;
+
+    if (items.length === 0) {
+      html += `<div class="empty">
+        <div class="icon">📭</div>
+        暂无观看记录<br>
+        <small style="color:#666">播放短剧时系统会自动记录每部剧的进度，下次点击即可无缝接续观看</small>
+      </div>`;
+    } else {
+      html += '<div class="history-list">';
+      for (const item of items) {
+        const sid = item.series_id;
+        const name = item.series_name || ('短剧 ' + sid);
+        const cover = item.series_cover || DEFAULT_COVER;
+        const ep = item.episode_num || 1;
+        const total = item.total_episodes || 1;
+        const cur = item.current_time || 0;
+        const dur = item.duration || 0;
+        const pct = dur > 0 ? Math.min(100, Math.round((cur / dur) * 100)) : 0;
+        const timeText = dur > 0 ? `${formatTime(cur)} / ${formatTime(dur)} (${pct}%)` : (cur > 0 ? formatTime(cur) : '第 1 秒');
+        const updateText = item.updated_at ? item.updated_at.replace('T', ' ').substring(0, 16) : '';
+
+        html += `<div class="history-item" onclick="resumeHistory('${sid}', ${ep}, ${total}, ${cur})">
+          <div class="history-cover">
+            <img src="${cover}" alt="${name}" referrerpolicy="no-referrer" onerror="this.src='${DEFAULT_COVER}'">
+            <div class="history-badge">第 ${ep} 集</div>
+          </div>
+          <div class="history-info">
+            <div class="history-title" title="${name}">${name}</div>
+            <div class="history-meta">
+              <span style="color:var(--accent2);font-weight:600">看到第 ${ep} / ${total} 集</span>
+              <span>单集进度: ${timeText}</span>
+              ${updateText ? `<span style="color:var(--text2)">${updateText}</span>` : ''}
+            </div>
+            <div class="history-progress">
+              <div class="history-fill" style="width:${pct}%"></div>
+            </div>
+          </div>
+          <div class="history-actions" onclick="event.stopPropagation()">
+            <button class="btn btn-primary" style="padding:8px 16px;font-size:13px" onclick="resumeHistory('${sid}', ${ep}, ${total}, ${cur})">
+              ▶ 继续播放
+            </button>
+            <button class="btn btn-outline" style="padding:8px 12px;font-size:13px;color:var(--text2)" onclick="deleteHistoryItem(event, '${sid}')" title="删除本条记录">
+              🗑
+            </button>
+          </div>
+        </div>`;
+      }
+      html += '</div>';
+    }
+
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = '<div class="empty"><div class="icon">😵</div>加载失败: ' + e.message + '</div>';
+  }
+}
+
+async function resumeHistory(seriesId, epNum, total, seekTime) {
+  await openDetail(seriesId);
+  setTimeout(() => {
+    playEpisode(seriesId, epNum, total, seekTime);
+  }, 250);
+}
+
+async function deleteHistoryItem(event, seriesId) {
+  event.stopPropagation();
+  await fetch(API + '/api/history/' + seriesId, {method: 'DELETE'});
+  loadHistory();
+}
+
+async function clearAllHistory() {
+  if (!confirm('确认清空所有最近观看记录？')) return;
+  await fetch(API + '/api/history', {method: 'DELETE'});
+  loadHistory();
+}
+
 // 自动刷新
 setInterval(() => {
   if (currentPage === 'downloads') loadDownloads();
+  else if (currentPage === 'history') loadHistory();
 }, 15000);
 
 // 启动默认页
