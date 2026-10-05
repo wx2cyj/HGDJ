@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
 <title>HGDJ 红果短剧</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -214,14 +215,15 @@ function renderGrid(items) {
   let html = '<div class="grid">';
   for (const item of items) {
     const sid = item.series_id || '';
-    const name = item.series_name || '未知';
+    const name = item.series_name || item.series_title || '未知';
     const cover = item.series_cover || '';
-    const eps = item.episode_cnt || item.episode_right_text || '';
-    const tags = (item.tags || []).slice(0, 3);
+    const eps = item.episode_right_text || (item.episode_cnt ? `全${item.episode_cnt}集` : '');
+    const tags = Array.isArray(item.tags) ? item.tags.slice(0, 3) : [];
     const imgSrc = cover ? cover.replace('~tplv-shrink:640:0', '~tplv-shrink:300:0') : '';
     html += `<div class="card" onclick="openDetail('${sid}')">
-      <img class="card-img" src="${imgSrc}" alt="${name}" loading="lazy" onerror="this.style.background='#333'">
-      <div class="card-badge">${eps}</div>
+      ${imgSrc ? `<img class="card-img" src="${imgSrc}" alt="${name}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">` : ''}
+      <div class="card-img" style="${imgSrc ? 'display:none;' : ''}display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1e1e38,#2d1f3d);font-size:28px;">🎬</div>
+      ${eps ? `<div class="card-badge">${eps}</div>` : ''}
       <div class="card-info">
         <div class="card-title" title="${name}">${name}</div>
         <div class="card-meta">${tags.map(t=>'<span class="tag">'+t+'</span>').join('')}</div>
@@ -245,16 +247,16 @@ async function openDetail(seriesId) {
     const eps = res.episodes || [];
     const stats = res.stats || {};
     const inQueue = res.in_queue;
-    const name = d.series_name || '';
+    const name = d.series_name || d.series_title || '';
     const cover = d.series_cover || '';
     const intro = d.series_intro || '';
-    const tags = (d.tags || []);
+    const tags = Array.isArray(d.tags) ? d.tags : [];
     const total = d.episode_cnt || d.vid_list?.length || 0;
     const vidList = d.vid_list || [];
 
     let html = `<button class="modal-close" onclick="closeModal()">✕</button>`;
     html += `<div class="detail-header">
-      <div class="detail-poster"><img src="${cover}" alt="${name}"></div>
+      <div class="detail-poster"><img src="${cover}" alt="${name}" referrerpolicy="no-referrer" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'200\\' height=\\'260\\' fill=\\'%23222\\'><rect width=\\'100%25\\' height=\\'100%25\\'/></svg>'"></div>
       <div class="detail-info">
         <h2>${name}</h2>
         <div class="card-meta" style="margin:8px 0">${tags.map(t=>'<span class="tag">'+t+'</span>').join('')}</div>

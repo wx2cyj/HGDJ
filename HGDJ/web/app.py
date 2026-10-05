@@ -10,7 +10,7 @@ from fastapi import FastAPI, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from ..client import HongguoClient, web_get_series_detail, web_get_homepage, web_get_category
+from ..client import HongguoClient, web_get_series_detail, web_get_homepage, web_get_category, web_search
 from ..crypto import decrypt_episode, hongguo_content_key, decrypt_cenc_mp4
 from ..state import StateDB
 
@@ -76,41 +76,17 @@ def create_app() -> FastAPI:
         except Exception as e:
             return JSONResponse({'error': str(e)}, 500)
 
-    # ── 搜索（通过网页端详情页） ──
+    # ── 搜索 ──
     @app.get('/api/search')
     async def search(q: str = ''):
-        if not q.strip():
+        keyword = q.strip()
+        if not keyword:
             return {'items': []}
         try:
-            import re, json
-            import html as htmlmod
-            from ..client import web_fetch
-            raw_html = web_fetch(f'/search?q={q}')
-            m = re.search(r'_ROUTER_DATA\s*=\s*(\{.*?\});', raw_html, re.DOTALL)
-            items = []
-            if m:
-                data = json.loads(m.group(1))
-                search_page = data.get('loaderData', {}).get('search_page', {})
-                items = search_page.get('searchList', [])
-            # 从 mergeLoaderData 也尝试提取
-            if not items:
-                m2 = re.search(r'data-fn-args="(.*?)"', raw_html)
-                if m2:
-                    args = htmlmod.unescape(m2.group(1))
-                    parsed = json.loads(args)
-                    if isinstance(parsed, list) and len(parsed) > 1:
-                        for item in parsed[1]:
-                            for fa in item.get('routerDataFnArgs', []):
-                                try:
-                                    sub = json.loads(fa)
-                                    for key in ('videoList', 'data', 'series_list', 'searchList'):
-                                        vl = sub.get(key, [])
-                                        if isinstance(vl, list):
-                                            items.extend(v for v in vl if isinstance(v, dict) and v.get('series_id'))
-                                except Exception:
-                                    pass
-            return {'items': items[:30], 'query': q}
+            items = web_search(keyword)
+            return {'items': items[:30], 'query': keyword}
         except Exception as e:
+            LOG.error('搜索异常: %s', e)
             return JSONResponse({'error': str(e)}, 500)
 
     # ── 剧集详情 ──

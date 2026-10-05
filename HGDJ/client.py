@@ -238,9 +238,37 @@ class HongguoClient:
 
 # ── 网页端数据获取 ──
 
+def _normalize_drama(raw_dict: dict) -> dict:
+    """统一规范化短剧元数据字段"""
+    vd = raw_dict.get('video_data', {})
+    src = vd if isinstance(vd, dict) and vd else raw_dict
+    sid = str(src.get('series_id') or raw_dict.get('keyword') or raw_dict.get('series_id') or '').strip()
+    name = (raw_dict.get('name') or src.get('series_title') or src.get('series_name') or '未知').strip()
+    cover = src.get('series_cover') or raw_dict.get('series_cover') or ''
+    eps = src.get('episode_cnt') or 0
+    eps_text = src.get('episode_right_text') or (f'全{eps}集' if eps else '')
+    tags = src.get('tags') or []
+    if isinstance(tags, str):
+        tags = [t.strip() for t in tags.split(',') if t.strip()]
+    intro = src.get('series_intro') or ''
+    return {
+        'series_id': sid,
+        'series_name': name,
+        'series_cover': cover,
+        'episode_cnt': eps,
+        'episode_right_text': eps_text,
+        'tags': tags,
+        'series_intro': intro,
+    }
+
+
 def web_fetch(path: str, timeout: int = 15) -> str:
-    """从红果网页端获取 HTML"""
-    url = WEB_BASE_URL + path
+    """从红果网页端获取 HTML，自动处理 URL 编码"""
+    parsed = urllib.parse.urlsplit(path)
+    safe_path = urllib.parse.quote(parsed.path)
+    if parsed.query:
+        safe_path += '?' + urllib.parse.quote(parsed.query, safe='=&')
+    url = WEB_BASE_URL.rstrip('/') + safe_path
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     req = urllib.request.Request(url, headers={'User-Agent': WEB_USER_AGENT})
     with opener.open(req, timeout=timeout) as resp:
@@ -265,43 +293,38 @@ def web_get_series_detail(series_id: str) -> dict:
 
 
 def web_get_homepage() -> list[dict]:
-    """从网页端获取首页推荐"""
+    """从网页端获取首页推荐短剧"""
     import re
-    import html as htmlmod
     raw_html = web_fetch('/')
+    m = re.search(r'_ROUTER_DATA\s*=\s*(\{.*?\});', raw_html, re.DOTALL)
     results = []
-    # 从 mergeLoaderData 提取推荐数据
-    m = re.search(r'data-fn-args="(.*?)"', raw_html)
+    seen = set()
     if m:
-        args = htmlmod.unescape(m.group(1))
         try:
-            parsed = json.loads(args)
-            if isinstance(parsed, list) and len(parsed) > 1:
-                for item in parsed[1]:
-                    fn_args = item.get('routerDataFnArgs', [])
-                    for fa in fn_args:
-                        try:
-                            sub = json.loads(fa)
-                            video_list = sub.get('videoList', [])
-                            for v in video_list:
-                                if isinstance(v, dict) and v.get('series_id'):
-                                    results.append(v)
-                        except (json.JSONDecodeError, KeyError):
-                            pass
-        except (json.JSONDecodeError, KeyError):
-            pass
-    # 从链接提取 series_id
-    if not results:
-        ids = re.findall(r'/detail\?series_id=(\d+)', raw_html)
-        for sid in dict.fromkeys(ids):
-            results.append({'series_id': sid})
+            data = json.loads(m.group(1))
+            page = data.get('loaderData', {}).get('page', {})
+            # 1. 顶部 Banner 推荐
+            for b in page.get('bannerList', []):
+                item = _normalize_drama(b)
+                if item['series_id'] and item['series_id'] not in seen:
+                    seen.add(item['series_id'])
+                    results.append(item)
+            # 2. 首页各版块（热播短剧、真人剧、漫剧、AI剧）
+            for sec in page.get('homeSections', []):
+                for v in sec.get('video_list', []):
+                    item = _normalize_drama(v)
+                    if item['series_id'] and item['series_id'] not in seen:
+                        seen.add(item['series_id'])
+                        results.append(item)
+        except Exception as e:
+            LOG.warning('解析首页推荐异常: %s', e)
+
     return results
 
 
 def web_get_category(category: str, page: int = 1) -> list[dict]:
     """从网页端获取分类列表"""
     import re
-    import html as htmlmod
     path_map = {
         'real-drama': '/category/real-drama',
         'comic-drama': '/category/comic-drama',
@@ -310,26 +333,46 @@ def web_get_category(category: str, page: int = 1) -> list[dict]:
     }
     path = path_map.get(category, f'/category/{category}')
     raw_html = web_fetch(path)
+    m = re.search(r'_ROUTER_DATA\s*=\s*(\{.*?\});', raw_html, re.DOTALL)
     results = []
-    m = re.search(r'data-fn-args="(.*?)"', raw_html)
+    seen = set()
     if m:
-        args = htmlmod.unescape(m.group(1))
         try:
-            parsed = json.loads(args)
-            if isinstance(parsed, list) and len(parsed) > 1:
-                for item in parsed[1]:
-                    fn_args = item.get('routerDataFnArgs', [])
-                    for fa in fn_args:
-                        try:
-                            sub = json.loads(fa)
-                            for key in ('videoList', 'data', 'series_list'):
-                                vl = sub.get(key, [])
-                                if isinstance(vl, list):
-                                    for v in vl:
-                                        if isinstance(v, dict) and v.get('series_id'):
-                                            results.append(v)
-                        except (json.JSONDecodeError, KeyError):
-                            pass
-        except (json.JSONDecodeError, KeyError):
-            pass
+            data = json.loads(m.group(1))
+            loader = data.get('loaderData', {})
+            cat_page = loader.get('category_$', {})
+            items = cat_page.get('recommendList', [])
+            for raw_item in items:
+                item = _normalize_drama(raw_item)
+                if item['series_id'] and item['series_id'] not in seen:
+                    seen.add(item['series_id'])
+                    results.append(item)
+        except Exception as e:
+            LOG.warning('解析分类列表异常: %s', e)
+
+    return results
+
+
+def web_search(keyword: str) -> list[dict]:
+    """通过网页端 /search/{keyword} 搜索短剧"""
+    import re
+    raw_html = web_fetch(f'/search/{keyword}')
+    m = re.search(r'_ROUTER_DATA\s*=\s*(\{.*?\});', raw_html, re.DOTALL)
+    results = []
+    seen = set()
+    if m:
+        try:
+            data = json.loads(m.group(1))
+            loader = data.get('loaderData', {})
+            for k, page in loader.items():
+                if 'search' in k and isinstance(page, dict):
+                    sl = page.get('searchList', [])
+                    for raw_item in sl:
+                        item = _normalize_drama(raw_item)
+                        if item['series_id'] and item['series_id'] not in seen:
+                            seen.add(item['series_id'])
+                            results.append(item)
+        except Exception as e:
+            LOG.warning('解析搜索结果异常: %s', e)
+
     return results
