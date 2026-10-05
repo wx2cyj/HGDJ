@@ -65,7 +65,7 @@ curl -sSL https://raw.githubusercontent.com/wx2cyj/HGDJ/main/config.example.json
 |--------|--------|----------|------|
 | **名称** | Name | `HGDJ` | 容器名称 |
 | **存储库** | Repository | `ghcr.io/wx2cyj/hgdj:latest` | 镜像地址 |
-| **WebUI 端口** | Port: 8088 | `8088` | Web 界面访问端口，可按需修改 |
+| **WebUI 端口** | Port: 8098 | `8098` | Web 界面访问端口，可按需修改 |
 | **配置文件目录** | Path: /config | `/mnt/user/appdata/HGDJ/config` | 存放 config.json |
 | **状态库目录** | Path: /data | `/mnt/user/appdata/HGDJ/data` | SQLite 数据库文件 |
 | **日志目录** | Path: /logs | `/mnt/user/appdata/HGDJ/logs` | 运行日志 |
@@ -85,7 +85,7 @@ curl -sSL https://raw.githubusercontent.com/wx2cyj/HGDJ/main/config.example.json
 ```bash
 docker run -d --name HGDJ \
   --restart unless-stopped \
-  -p 8088:8088 \
+  -p 8098:8098 \
   -v /mnt/user/appdata/HGDJ/config:/config \
   -v /mnt/user/appdata/HGDJ/data:/data \
   -v /mnt/user/appdata/HGDJ/logs:/logs \
@@ -99,7 +99,7 @@ docker run -d --name HGDJ \
 
 ## 四、WebUI 界面说明
 
-访问 `http://[你的Unraid主机IP]:8088`：
+访问 `http://[你的Unraid主机IP]:8098`：
 
 1. **首页推荐 & 分类浏览**：展示最新、最热短剧海报与总集数，支持真人剧、漫剧、AI剧切换。
 2. **搜索短剧**：顶部搜索框直接输入短剧名称快速检索。

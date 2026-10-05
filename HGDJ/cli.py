@@ -70,7 +70,7 @@ def main() -> None:
     download_mgr.start()
 
     # 启动 WebUI
-    port = args.port or cfg.get('web', {}).get('port', 8088)
+    port = args.port or cfg.get('web', {}).get('port', 8098)
     app = create_app()
 
     import uvicorn

@@ -1,6 +1,6 @@
 {
   "web": {
-    "port": 8088
+    "port": 8098
   },
   "download": {
     "root": "/media",

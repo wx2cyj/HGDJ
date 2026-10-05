@@ -7,7 +7,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-EXPOSE 8088
+EXPOSE 8098
 
 VOLUME ["/config", "/data", "/media", "/logs"]
 
