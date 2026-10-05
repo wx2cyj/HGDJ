@@ -13,7 +13,7 @@
   <Category>Downloaders: MediaApp:Video</Category>
   <WebUI>http://[IP]:[PORT:8098]</WebUI>
   <TemplateURL/>
-  <Icon/>
+  <Icon>https://lf-fe.fqnovelstatic.com/obj/novel-fanqie-fe/growth/incentive-h5-monorepo/apps/hongguo/app-logo.png</Icon>
   <ExtraParams>--restart unless-stopped</ExtraParams>
   <PostArgs>--daemon</PostArgs>
   <CPUset/>
