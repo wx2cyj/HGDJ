@@ -15,7 +15,7 @@ ENV TZ=Asia/Shanghai
 
 LABEL net.unraid.docker.managed="dockerman" \
       net.unraid.docker.webui="http://[IP]:[PORT:8098]" \
-      net.unraid.docker.icon="https://raw.githubusercontent.com/wx2cyj/HGDJ/main/unraid/logo.png"
+      net.unraid.docker.icon="https://fastly.jsdelivr.net/gh/wx2cyj/HGDJ@main/unraid/logo.png"
 
 ENTRYPOINT ["python", "-m", "HGDJ.cli"]
 CMD ["--config", "/config/config.json", "--daemon"]

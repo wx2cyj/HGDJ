@@ -64,14 +64,14 @@ mkdir -p /mnt/user/appdata/HGDJ/config /mnt/user/appdata/HGDJ/data /mnt/user/app
 将项目中的 `config.example.json` 复制到 `/mnt/user/appdata/HGDJ/config/config.json`：
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/wx2cyj/HGDJ/main/config.example.json -o /mnt/user/appdata/HGDJ/config/config.json
+curl -sSL https://fastly.jsdelivr.net/gh/wx2cyj/HGDJ@main/config.example.json -o /mnt/user/appdata/HGDJ/config/config.json
 ```
 
 ### 第二步：添加 Unraid 容器模板
 
 1. 在 Unraid 终端中下载专属 XML 模板文件：
    ```bash
-   curl -sSL https://raw.githubusercontent.com/wx2cyj/HGDJ/main/unraid/hgdj.xml -o /boot/config/plugins/dockerMan/templates-user/my-hgdj.xml
+   curl -sSL https://fastly.jsdelivr.net/gh/wx2cyj/HGDJ@main/unraid/hgdj.xml -o /boot/config/plugins/dockerMan/templates-user/my-hgdj.xml
    ```
 2. 进入 Unraid 网页端 **【Docker】** → 滑动到底部点击 **【添加容器】（Add Container）**。
 3. 在顶部的 **【模板】（Template）** 下拉菜单中选择 **`HGDJ`**（系统会自动填充所有配置项与路径映射）。
