@@ -412,7 +412,11 @@ function closeModal() {
   saveCurrentProgress();
   document.getElementById('modal').classList.remove('show');
   const v = document.getElementById('videoPlayer');
-  if (v) { v.pause(); v.src = ''; }
+  if (v) {
+    v.pause();
+    v.removeAttribute('src');
+    v.load();
+  }
 }
 
 // ── 播放 ──
@@ -434,7 +438,11 @@ async function playEpisode(seriesId, epNum, total, seekTime = 0) {
   const video = document.getElementById('videoPlayer');
   const title = document.getElementById('playerTitle');
   title.textContent = `正在加载第 ${epNum} 集（实时解密）...`;
-  video.src = '';
+
+  // 优雅释放旧视频的媒体流与网络连接，避免浏览器 HTTP/1.1 连接池耗尽或解码器卡死
+  video.pause();
+  video.removeAttribute('src');
+  video.load();
 
   // 恢复进度控制
   if (seekTime > 0) {
@@ -452,13 +460,6 @@ async function playEpisode(seriesId, epNum, total, seekTime = 0) {
     video.onloadedmetadata = null;
     video.oncanplay = null;
   }
-
-  video.src = API + `/api/play/${seriesId}/${epNum}`;
-  video.load();
-  try {
-    await video.play();
-  } catch(e) {}
-  title.textContent = `正在播放第 ${epNum} 集 / 共 ${total} 集`;
 
   // 播放进度追踪与自动连播
   video.ontimeupdate = () => {
@@ -479,6 +480,12 @@ async function playEpisode(seriesId, epNum, total, seekTime = 0) {
       playEpisode(seriesId, _currentEp + 1, total);
     }
   };
+
+  // 赋予新源并加载播放
+  video.src = API + `/api/play/${seriesId}/${epNum}`;
+  video.load();
+  title.textContent = `正在播放第 ${epNum} 集 / 共 ${total} 集`;
+  video.play().catch(() => {});
 
   section.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }

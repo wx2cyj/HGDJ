@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
+import anyio
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -22,7 +24,69 @@ _client: HongguoClient | None = None
 _download_mgr: Any = None
 _play_cache: dict[str, bytes] = {}  # vid -> decrypted mp4 bytes
 _play_cache_lock = threading.Lock()
-_MAX_CACHE = 10  # 最多缓存 10 集
+_MAX_CACHE = 15  # 最多缓存 15 集
+
+# 并发防重入锁：同一集的多个并发 Range 请求共享一把锁，防止重复下载和重复解密
+_inflight_locks: dict[str, threading.Lock] = {}
+_inflight_master_lock = threading.Lock()
+
+# 剧集详情缓存，避免每次切集都爬取外部网页
+_series_cache: dict[str, dict] = {}
+_series_cache_lock = threading.Lock()
+
+
+def _get_inflight_lock(key: str) -> threading.Lock:
+    with _inflight_master_lock:
+        if key not in _inflight_locks:
+            _inflight_locks[key] = threading.Lock()
+        return _inflight_locks[key]
+
+
+def _cleanup_inflight_lock(key: str) -> None:
+    with _inflight_master_lock:
+        _inflight_locks.pop(key, None)
+
+
+def _fetch_and_decrypt_sync(cache_key: str, vid: str, series_name: str, episode_num: int) -> bytes:
+    """在后台工作线程中执行下载与解密（带双重检查互斥锁，避免雪崩）"""
+    with _play_cache_lock:
+        if cache_key in _play_cache:
+            return _play_cache[cache_key]
+
+    lock = _get_inflight_lock(cache_key)
+    with lock:
+        # 双重检查：如果并发的另一个请求刚解密完成，直接返回缓存结果
+        with _play_cache_lock:
+            if cache_key in _play_cache:
+                return _play_cache[cache_key]
+
+        if not _client:
+            raise RuntimeError('客户端未就绪')
+
+        # 1. 获取播放地址与密钥
+        vm = _client.get_video_model(vid)
+        media = _client.select_best_media(vm)
+        LOG.info('播放《%s》第%d集: %dp %s', series_name, episode_num,
+                 media['quality'], media['codec'])
+
+        # 2. 下载加密视频
+        encrypted = _client.download_bytes(media['url'], media['referer'], timeout=120)
+
+        # 3. 解密
+        if media['spade_a']:
+            decrypted = decrypt_episode(encrypted, media['spade_a'])
+        else:
+            decrypted = encrypted
+
+        # 4. 存入内存缓存（淘汰最旧缓存）
+        with _play_cache_lock:
+            if len(_play_cache) >= _MAX_CACHE:
+                oldest = next(iter(_play_cache))
+                del _play_cache[oldest]
+            _play_cache[cache_key] = decrypted
+
+        _cleanup_inflight_lock(cache_key)
+        return decrypted
 
 
 def set_shared(state: StateDB, client: HongguoClient, download_mgr: Any) -> None:
@@ -94,13 +158,16 @@ def create_app() -> FastAPI:
             LOG.error('搜索异常: %s', e)
             return JSONResponse({'error': str(e)}, 500)
 
-    # ── 剧集详情 ──
-    @app.get('/api/series/{series_id}')
-    async def series_detail(series_id: str):
-        try:
-            sd = web_get_series_detail(series_id)
-            # 同时注册到数据库
-            if _state_db:
+    def _get_cached_series_detail(series_id: str) -> dict:
+        with _series_cache_lock:
+            if series_id in _series_cache:
+                return _series_cache[series_id]
+        sd = web_get_series_detail(series_id)
+        with _series_cache_lock:
+            _series_cache[series_id] = sd
+        # 预注册剧集及各分集 vid 到数据库，后续播放无需重复网络爬取
+        if _state_db:
+            try:
                 _state_db.upsert_series(
                     series_id=series_id,
                     name=sd.get('series_name', ''),
@@ -109,6 +176,18 @@ def create_app() -> FastAPI:
                     episode_count=sd.get('episode_cnt', 0),
                     tags=','.join(sd.get('tags', [])) if isinstance(sd.get('tags'), list) else '',
                 )
+                vid_list = sd.get('vid_list', [])
+                for i, vid in enumerate(vid_list, 1):
+                    _state_db.upsert_episode(series_id, i, vid)
+            except Exception as e:
+                LOG.warning('预注册分集异常: %s', e)
+        return sd
+
+    # ── 剧集详情 ──
+    @app.get('/api/series/{series_id}')
+    async def series_detail(series_id: str):
+        try:
+            sd = await anyio.to_thread.run_sync(_get_cached_series_detail, series_id)
             # 获取下载状态
             episodes = _state_db.get_episodes(series_id) if _state_db else []
             in_queue = _state_db.is_in_queue(series_id) if _state_db else False
@@ -138,7 +217,9 @@ def create_app() -> FastAPI:
         # 代理远程封面
         if s and s.get('cover_url') and _client:
             try:
-                data = _client.download_bytes(s['cover_url'], timeout=15)
+                data = await anyio.to_thread.run_sync(
+                    _client.download_bytes, s['cover_url'], 'https://novel.snssdk.com/', 15, 2
+                )
                 return Response(data, media_type='image/jpeg',
                                 headers={'Cache-Control': 'max-age=3600'})
             except Exception:
@@ -151,15 +232,6 @@ def create_app() -> FastAPI:
         if not _client:
             return JSONResponse({'error': 'not ready'}, 503)
         try:
-            # 获取 vid
-            sd = web_get_series_detail(series_id)
-            vid_list = sd.get('vid_list', [])
-            if episode_num < 1 or episode_num > len(vid_list):
-                return JSONResponse({'error': f'集数超出范围 (1-{len(vid_list)})'}, 404)
-            vid = vid_list[episode_num - 1]
-
-            cache_key = f'{series_id}_{episode_num}_{vid}'
-
             # 优先从已下载的文件读取
             if _state_db:
                 ep_row = _state_db.get_episode(series_id, episode_num)
@@ -168,39 +240,38 @@ def create_app() -> FastAPI:
                     if local_p.is_file():
                         return FileResponse(str(local_p), media_type='video/mp4')
 
-            decrypted: bytes | None = None
-            with _play_cache_lock:
-                if cache_key in _play_cache:
-                    decrypted = _play_cache[cache_key]
+            # 优先从数据库缓存获取 vid
+            vid = ''
+            series_name = ''
+            if _state_db:
+                ep_row = _state_db.get_episode(series_id, episode_num)
+                if ep_row and ep_row.get('vid'):
+                    vid = ep_row['vid']
+                s_row = _state_db.get_series(series_id)
+                if s_row:
+                    series_name = s_row.get('name', '')
 
-            if decrypted is None:
-                # 获取播放地址
-                vm = _client.get_video_model(vid)
-                media = _client.select_best_media(vm)
-                LOG.info('播放《%s》第%d集: %dp %s', sd.get('series_name', ''), episode_num,
-                         media['quality'], media['codec'])
+            # 若数据库未缓存 vid，异步抓取剧集详情
+            if not vid:
+                sd = await anyio.to_thread.run_sync(_get_cached_series_detail, series_id)
+                vid_list = sd.get('vid_list', [])
+                if episode_num < 1 or episode_num > len(vid_list):
+                    return JSONResponse({'error': f'集数超出范围 (1-{len(vid_list)})'}, 404)
+                vid = vid_list[episode_num - 1]
+                series_name = sd.get('series_name', '')
 
-                # 下载加密视频
-                encrypted = _client.download_bytes(media['url'], media['referer'], timeout=120)
+            cache_key = f'{series_id}_{episode_num}_{vid}'
 
-                # 解密
-                if media['spade_a']:
-                    decrypted = decrypt_episode(encrypted, media['spade_a'])
-                else:
-                    decrypted = encrypted
-
-                # 放入缓存
-                with _play_cache_lock:
-                    if len(_play_cache) >= _MAX_CACHE:
-                        oldest = next(iter(_play_cache))
-                        del _play_cache[oldest]
-                    _play_cache[cache_key] = decrypted
+            # 在后台线程池执行下载与解密（带防重入锁，绝不阻塞主事件循环）
+            decrypted = await anyio.to_thread.run_sync(
+                _fetch_and_decrypt_sync, cache_key, vid, series_name, episode_num
+            )
 
             file_size = len(decrypted)
             range_header = request.headers.get('Range')
 
             if range_header:
-                # 兼容 Safari 和移动端浏览器必须的 HTTP 206 Partial Content
+                # 兼容 Safari、Chrome 和移动端浏览器必须的 HTTP 206 Partial Content
                 try:
                     range_val = range_header.strip().replace('bytes=', '')
                     parts = range_val.split('-')
