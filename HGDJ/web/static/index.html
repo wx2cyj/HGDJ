@@ -82,11 +82,22 @@ a{color:var(--accent2);text-decoration:none}
 /* Player */
 .player-section{padding:0 24px 24px}
 .player-container{background:#000;border-radius:12px;overflow:hidden;position:relative}
-.player-container video{width:100%;max-height:60vh;display:block}
+.player-container:fullscreen,.player-container:-webkit-full-screen{border-radius:0;width:100vw;height:100vh;display:flex;flex-direction:column;justify-content:center}
+.player-container:fullscreen .video-stage,.player-container:-webkit-full-screen .video-stage{max-height:100vh;height:100vh}
+.player-container:fullscreen .player-video,.player-container:-webkit-full-screen .player-video{max-height:100vh;height:100%}
+.player-container:fullscreen .player-title,.player-container:fullscreen .player-nav,
+.player-container:-webkit-full-screen .player-title,.player-container:-webkit-full-screen .player-nav{display:none}
+
+.video-stage{position:relative;width:100%;min-height:220px;background:#000;display:flex;justify-content:center;align-items:center;overflow:hidden}
+.player-video{width:100%;max-height:60vh;display:block;background:#000;transition:opacity .15s ease}
+.player-video.active{position:relative;z-index:2;opacity:1;pointer-events:auto}
+.player-video.next{position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;opacity:0;pointer-events:none}
 .player-tip{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.8);color:#fff;padding:10px 22px;border-radius:24px;font-size:16px;pointer-events:none;opacity:0;transition:opacity .2s;z-index:25;font-weight:600;backdrop-filter:blur(6px);box-shadow:0 4px 16px rgba(0,0,0,.5)}
 .player-tip.show{opacity:1}
-.player-title{padding:12px;font-size:14px;color:var(--text2);display:flex;justify-content:space-between;align-items:center}
-.player-nav{display:flex;gap:10px;padding:0 12px 12px}
+.preload-badge{position:absolute;top:12px;right:12px;background:rgba(0,200,83,.9);color:#fff;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:600;z-index:20;opacity:0;transition:opacity .3s;pointer-events:none;backdrop-filter:blur(4px);display:flex;align-items:center;gap:4px;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.preload-badge.show{opacity:1}
+.player-title{padding:12px;font-size:14px;color:var(--text2);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.player-nav{display:flex;gap:10px;padding:0 12px 12px;align-items:center}
 /* Downloads page */
 .dl-item{background:var(--card);border-radius:12px;padding:16px;margin-bottom:12px;display:flex;gap:16px;align-items:center}
 .dl-item .name{flex:1;font-weight:600}
@@ -368,18 +379,25 @@ async function openDetail(seriesId) {
       </div>
     </div>`;
 
-    // 播放器区域
+    // 播放器区域（双缓冲双播放器架构，无缝切集0卡顿）
     html += `<div class="player-section" id="playerSection" style="display:none">
-      <div class="player-container">
-        <video id="videoPlayer" controls playsinline></video>
-        <div class="player-tip" id="playerTip"></div>
+      <div class="player-container" id="playerContainer">
+        <div class="video-stage" id="videoStage" ondblclick="toggleContainerFullscreen()">
+          <video id="videoPlayerA" class="player-video active" controls playsinline preload="auto"></video>
+          <video id="videoPlayerB" class="player-video next" playsinline preload="auto"></video>
+          <div class="player-tip" id="playerTip"></div>
+          <div class="preload-badge" id="preloadBadge">⚡ 下一集已就绪</div>
+        </div>
         <div class="player-title">
           <span id="playerTitle"></span>
-          <span style="font-size:12px;color:var(--text2)">空格键 暂停/播放 · 左右方向键 快退/快进 5秒</span>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:12px;color:var(--text2)">空格 暂停/播放 · 左右 快退/快进 5s · 双击全屏</span>
+            <button class="btn btn-outline" style="padding:4px 10px;font-size:12px" onclick="toggleContainerFullscreen()">⛶ 全屏</button>
+          </div>
         </div>
         <div class="player-nav">
           <button class="btn btn-outline" onclick="playEp(-1)">⏮ 上一集</button>
-          <button class="btn btn-outline" onclick="playEp(1)">下一集 ⏭</button>
+          <button class="btn btn-outline" id="btnNextEp" onclick="playEp(1)">下一集 ⏭</button>
         </div>
       </div>
     </div>`;
@@ -408,60 +426,259 @@ async function openDetail(seriesId) {
   }
 }
 
-function closeModal() {
-  saveCurrentProgress();
-  document.getElementById('modal').classList.remove('show');
-  const v = document.getElementById('videoPlayer');
-  if (v) {
-    v.pause();
-    v.removeAttribute('src');
-    v.load();
+// ── 双缓冲无缝播放器状态与逻辑 ──
+let _currentSeries = '', _currentEp = 0, _totalEps = 0;
+let _lastSaveTime = 0;
+let _activePlayerIdx = 0;    // 0: A激活, 1: B激活
+let _preloadEp = 0;          // 正在预加载的集数
+let _isPreloadReady = false; // 备用播放器是否已完全就绪 (canplay)
+let _preloadTimer = null;    // 延迟预热定时器
+let _badgeTimer = null;
+
+function getActiveVideo() {
+  const vA = document.getElementById('videoPlayerA');
+  const vB = document.getElementById('videoPlayerB');
+  return _activePlayerIdx === 0 ? vA : vB;
+}
+
+function getNextVideo() {
+  const vA = document.getElementById('videoPlayerA');
+  const vB = document.getElementById('videoPlayerB');
+  return _activePlayerIdx === 0 ? vB : vA;
+}
+
+function showPreloadBadge(text = '⚡ 下一集已就绪') {
+  const badge = document.getElementById('preloadBadge');
+  if (!badge) return;
+  badge.textContent = text;
+  badge.classList.add('show');
+  clearTimeout(_badgeTimer);
+  _badgeTimer = setTimeout(() => badge.classList.remove('show'), 2500);
+}
+
+function hidePreloadBadge() {
+  const badge = document.getElementById('preloadBadge');
+  if (badge) badge.classList.remove('show');
+}
+
+// 全屏切换（容器级全屏，切集不掉全屏）
+function toggleContainerFullscreen() {
+  const container = document.getElementById('playerContainer');
+  if (!container) return;
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    if (container.requestFullscreen) {
+      container.requestFullscreen().catch(()=>{});
+    } else if (container.webkitRequestFullscreen) {
+      container.webkitRequestFullscreen();
+    }
+  } else {
+    if (document.exitFullscreen) {
+      document.exitFullscreen().catch(()=>{});
+    } else if (document.webkitExitFullscreen) {
+      document.webkitExitFullscreen();
+    }
   }
 }
 
-// ── 播放 ──
-let _currentSeries='', _currentEp=0, _totalEps=0;
-let _lastSaveTime = 0;
+function closeModal() {
+  saveCurrentProgress();
+  document.getElementById('modal').classList.remove('show');
+  clearTimeout(_preloadTimer);
+  clearTimeout(_badgeTimer);
+  _preloadEp = 0;
+  _isPreloadReady = false;
+  hidePreloadBadge();
 
+  const vA = document.getElementById('videoPlayerA');
+  const vB = document.getElementById('videoPlayerB');
+  [vA, vB].forEach(v => {
+    if (v) {
+      v.pause();
+      v.onloadedmetadata = null;
+      v.oncanplay = null;
+      v.ontimeupdate = null;
+      v.onended = null;
+      v.onpause = null;
+      v.removeAttribute('src');
+      v.load();
+    }
+  });
+}
+
+// ── 后台预加载下一集（后端解密预热 + 浏览器解码预热） ──
+function triggerPreloadNext(seriesId, currentEp, total) {
+  clearTimeout(_preloadTimer);
+  if (currentEp >= total) {
+    _preloadEp = 0;
+    _isPreloadReady = false;
+    hidePreloadBadge();
+    return;
+  }
+
+  const nextEp = currentEp + 1;
+  if (_preloadEp === nextEp && _isPreloadReady) return;
+
+  _preloadEp = nextEp;
+  _isPreloadReady = false;
+
+  // 播放 2 秒后平稳启动预加载（防连续快速切集）
+  _preloadTimer = setTimeout(() => {
+    if (_currentSeries !== seriesId || _currentEp !== currentEp) return;
+
+    // 1. 通知后端提前下载解密存入内存缓存（网络与解密预热）
+    fetch(API + `/api/preload/${seriesId}/${nextEp}`).catch(() => {});
+
+    // 2. 备用 Video 标签在后台静音拉取数据并解码首帧（解码预热）
+    const nextVideo = getNextVideo();
+    if (!nextVideo) return;
+
+    nextVideo.pause();
+    nextVideo.muted = true;      // 预加载必须静音，防意外发声
+    nextVideo.controls = false;   // 隐藏控制条
+    nextVideo.removeAttribute('src');
+    nextVideo.load();
+
+    const onCanPlay = () => {
+      if (_preloadEp === nextEp) {
+        _isPreloadReady = true;
+        showPreloadBadge(`⚡ 第 ${nextEp} 集已就绪（无缝切集）`);
+      }
+      nextVideo.removeEventListener('canplay', onCanPlay);
+    };
+    nextVideo.addEventListener('canplay', onCanPlay);
+
+    nextVideo.src = API + `/api/play/${seriesId}/${nextEp}`;
+    nextVideo.load();
+  }, 2000);
+}
+
+// ── 播放指定集数 ──
 async function playEpisode(seriesId, epNum, total, seekTime = 0) {
   _currentSeries = seriesId;
-  _currentEp = epNum;
   _totalEps = total;
   _lastSaveTime = 0;
 
+  // 更新集数按钮高亮
   document.querySelectorAll('.ep-btn').forEach(b => b.classList.remove('playing'));
-  const btn = document.getElementById('ep'+epNum);
+  const btn = document.getElementById('ep' + epNum);
   if (btn) btn.classList.add('playing');
 
   const section = document.getElementById('playerSection');
-  section.style.display = 'block';
-  const video = document.getElementById('videoPlayer');
+  if (section) section.style.display = 'block';
   const title = document.getElementById('playerTitle');
-  title.textContent = `正在加载第 ${epNum} 集（实时解密）...`;
 
-  // 优雅释放旧视频的媒体流与网络连接，避免浏览器 HTTP/1.1 连接池耗尽或解码器卡死
-  video.pause();
-  video.removeAttribute('src');
-  video.load();
+  const activeVideo = getActiveVideo();
+  const nextVideo = getNextVideo();
 
-  // 恢复进度控制
-  if (seekTime > 0) {
-    let seekApplied = false;
-    const applySeek = () => {
-      if (!seekApplied && video.duration && !isNaN(video.duration)) {
-        seekApplied = true;
-        video.currentTime = Math.min(seekTime, Math.max(0, video.duration - 1));
-        showPlayerTip(`已恢复至 ${formatTime(video.currentTime)}`);
+  // ── 核心分支：命中预加载，执行 0 延迟无缝直切 ──
+  if (epNum === _preloadEp && _isPreloadReady && nextVideo && nextVideo.readyState >= 2) {
+    // 1. 暂停当前视频并解除事件
+    if (activeVideo) {
+      activeVideo.pause();
+      activeVideo.ontimeupdate = null;
+      activeVideo.onended = null;
+      activeVideo.onpause = null;
+    }
+
+    // 2. 准备下一集：解除静音、显示控制条
+    nextVideo.muted = false;
+    nextVideo.controls = true;
+
+    // 3. CSS 图层瞬间交接：下一集切到最前台
+    activeVideo.classList.remove('active');
+    activeVideo.classList.add('next');
+    activeVideo.controls = false;
+
+    nextVideo.classList.remove('next');
+    nextVideo.classList.add('active');
+
+    // 4. 轮转激活播放器指针
+    _activePlayerIdx = 1 - _activePlayerIdx;
+    _currentEp = epNum;
+    _preloadEp = 0;
+    _isPreloadReady = false;
+    hidePreloadBadge();
+
+    // 5. 绑定播放事件到新的 active 播放器
+    bindPlayerEvents(nextVideo, seriesId, epNum, total);
+
+    // 6. 瞬间起播！
+    if (title) title.textContent = `正在播放第 ${epNum} 集 / 共 ${total} 集`;
+    showPlayerTip(`▶ 第 ${epNum} 集（无缝直切）`);
+    nextVideo.play().catch(() => {});
+
+    // 7. 优雅释放旧播放器资源
+    setTimeout(() => {
+      if (activeVideo && !activeVideo.classList.contains('active')) {
+        activeVideo.pause();
+        activeVideo.removeAttribute('src');
+        activeVideo.load();
       }
-    };
-    video.onloadedmetadata = applySeek;
-    video.oncanplay = applySeek;
-  } else {
-    video.onloadedmetadata = null;
-    video.oncanplay = null;
+    }, 400);
+
+    // 8. 继续为再下一集开启后台预加载
+    triggerPreloadNext(seriesId, epNum, total);
+    return;
   }
 
-  // 播放进度追踪与自动连播
+  // ── 未命中预加载（初次播放、跳集播放等） ──
+  _currentEp = epNum;
+  clearTimeout(_preloadTimer);
+  _preloadEp = 0;
+  _isPreloadReady = false;
+  hidePreloadBadge();
+
+  if (title) title.textContent = `正在加载第 ${epNum} 集（实时解密）...`;
+
+  // 清空后台备用播放器
+  if (nextVideo) {
+    nextVideo.pause();
+    nextVideo.removeAttribute('src');
+    nextVideo.load();
+  }
+
+  // 重新加载前台 active 播放器
+  if (activeVideo) {
+    activeVideo.pause();
+    activeVideo.controls = true;
+    activeVideo.muted = false;
+    activeVideo.removeAttribute('src');
+    activeVideo.load();
+
+    // 进度恢复控制
+    if (seekTime > 0) {
+      let seekApplied = false;
+      const applySeek = () => {
+        if (!seekApplied && activeVideo.duration && !isNaN(activeVideo.duration)) {
+          seekApplied = true;
+          activeVideo.currentTime = Math.min(seekTime, Math.max(0, activeVideo.duration - 1));
+          showPlayerTip(`已恢复至 ${formatTime(activeVideo.currentTime)}`);
+        }
+      };
+      activeVideo.onloadedmetadata = applySeek;
+      activeVideo.oncanplay = applySeek;
+    } else {
+      activeVideo.onloadedmetadata = null;
+      activeVideo.oncanplay = null;
+    }
+
+    bindPlayerEvents(activeVideo, seriesId, epNum, total);
+
+    activeVideo.src = API + `/api/play/${seriesId}/${epNum}`;
+    activeVideo.load();
+    if (title) title.textContent = `正在播放第 ${epNum} 集 / 共 ${total} 集`;
+    activeVideo.play().catch(() => {});
+  }
+
+  // 启动下一集的预加载
+  triggerPreloadNext(seriesId, epNum, total);
+
+  if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function bindPlayerEvents(video, seriesId, epNum, total) {
+  if (!video) return;
+
   video.ontimeupdate = () => {
     const now = Date.now();
     if (now - _lastSaveTime > 4000) {
@@ -480,19 +697,11 @@ async function playEpisode(seriesId, epNum, total, seekTime = 0) {
       playEpisode(seriesId, _currentEp + 1, total);
     }
   };
-
-  // 赋予新源并加载播放
-  video.src = API + `/api/play/${seriesId}/${epNum}`;
-  video.load();
-  title.textContent = `正在播放第 ${epNum} 集 / 共 ${total} 集`;
-  video.play().catch(() => {});
-
-  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function saveCurrentProgress(isEnded = false) {
   if (!_currentSeries || !_currentEp) return;
-  const video = document.getElementById('videoPlayer');
+  const video = getActiveVideo();
   if (!video) return;
   const cur = isEnded ? 0 : (video.currentTime || 0);
   const dur = video.duration || 0;
@@ -538,7 +747,7 @@ function formatTime(sec) {
   return `${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
-// ── 播放器快捷键（空格暂停/播放，左右方向键快进/后退 5 秒） ──
+// ── 播放器快捷键（空格暂停/播放，左右方向键快退/快进 5 秒） ──
 document.addEventListener('keydown', (e) => {
   // 如果焦点在输入框中，不拦截快捷键（避免影响搜索输入）
   const tag = (e.target && e.target.tagName) || '';
@@ -547,7 +756,7 @@ document.addEventListener('keydown', (e) => {
   }
 
   const modal = document.getElementById('modal');
-  const video = document.getElementById('videoPlayer');
+  const video = getActiveVideo();
   const section = document.getElementById('playerSection');
 
   // 仅在弹窗打开且播放器已载入时生效

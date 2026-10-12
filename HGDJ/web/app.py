@@ -89,6 +89,46 @@ def _fetch_and_decrypt_sync(cache_key: str, vid: str, series_name: str, episode_
         return decrypted
 
 
+def _prepare_episode_sync(series_id: str, episode_num: int) -> dict:
+    """在后台工作线程中确保指定集数就绪（本地文件 或 内存解密缓存）"""
+    if not _client:
+        raise RuntimeError('客户端未就绪')
+
+    # 1. 优先从已下载的文件读取
+    if _state_db:
+        ep_row = _state_db.get_episode(series_id, episode_num)
+        if ep_row and ep_row.get('status') == 'done' and ep_row.get('file_path'):
+            local_p = Path(ep_row['file_path'])
+            if local_p.is_file():
+                return {'type': 'local', 'path': str(local_p)}
+
+    # 2. 优先从数据库缓存获取 vid
+    vid = ''
+    series_name = ''
+    if _state_db:
+        ep_row = _state_db.get_episode(series_id, episode_num)
+        if ep_row and ep_row.get('vid'):
+            vid = ep_row['vid']
+        s_row = _state_db.get_series(series_id)
+        if s_row:
+            series_name = s_row.get('name', '')
+
+    # 若数据库未缓存 vid，同步获取剧集详情
+    if not vid:
+        sd = _get_cached_series_detail(series_id)
+        vid_list = sd.get('vid_list', [])
+        if episode_num < 1 or episode_num > len(vid_list):
+            raise ValueError(f'集数超出范围 (1-{len(vid_list)})')
+        vid = vid_list[episode_num - 1]
+        series_name = sd.get('series_name', '')
+
+    cache_key = f'{series_id}_{episode_num}_{vid}'
+
+    # 3. 在工作线程池中执行下载与解密（带双重检查互斥锁，避免雪崩）
+    decrypted = _fetch_and_decrypt_sync(cache_key, vid, series_name, episode_num)
+    return {'type': 'memory', 'data': decrypted, 'cache_key': cache_key}
+
+
 def set_shared(state: StateDB, client: HongguoClient, download_mgr: Any) -> None:
     global _state_db, _client, _download_mgr
     _state_db = state
@@ -226,47 +266,34 @@ def create_app() -> FastAPI:
                 pass
         return JSONResponse({'error': 'not found'}, 404)
 
+    # ── 预加载下一集 ──
+    @app.get('/api/preload/{series_id}/{episode_num}')
+    async def preload_episode(series_id: str, episode_num: int):
+        if not _client:
+            return JSONResponse({'error': 'not ready'}, 503)
+        try:
+            res = await anyio.to_thread.run_sync(_prepare_episode_sync, series_id, episode_num)
+            return {
+                'ok': True,
+                'series_id': series_id,
+                'episode_num': episode_num,
+                'source': res.get('type', 'ready'),
+            }
+        except Exception as e:
+            LOG.warning('预加载《%s》第%d集失败: %s', series_id, episode_num, e)
+            return JSONResponse({'error': str(e)}, 500)
+
     # ── 在线播放 ──
     @app.get('/api/play/{series_id}/{episode_num}')
     async def play(series_id: str, episode_num: int, request: Request):
         if not _client:
             return JSONResponse({'error': 'not ready'}, 503)
         try:
-            # 优先从已下载的文件读取
-            if _state_db:
-                ep_row = _state_db.get_episode(series_id, episode_num)
-                if ep_row and ep_row.get('status') == 'done' and ep_row.get('file_path'):
-                    local_p = Path(ep_row['file_path'])
-                    if local_p.is_file():
-                        return FileResponse(str(local_p), media_type='video/mp4')
+            res = await anyio.to_thread.run_sync(_prepare_episode_sync, series_id, episode_num)
+            if res.get('type') == 'local':
+                return FileResponse(res['path'], media_type='video/mp4')
 
-            # 优先从数据库缓存获取 vid
-            vid = ''
-            series_name = ''
-            if _state_db:
-                ep_row = _state_db.get_episode(series_id, episode_num)
-                if ep_row and ep_row.get('vid'):
-                    vid = ep_row['vid']
-                s_row = _state_db.get_series(series_id)
-                if s_row:
-                    series_name = s_row.get('name', '')
-
-            # 若数据库未缓存 vid，异步抓取剧集详情
-            if not vid:
-                sd = await anyio.to_thread.run_sync(_get_cached_series_detail, series_id)
-                vid_list = sd.get('vid_list', [])
-                if episode_num < 1 or episode_num > len(vid_list):
-                    return JSONResponse({'error': f'集数超出范围 (1-{len(vid_list)})'}, 404)
-                vid = vid_list[episode_num - 1]
-                series_name = sd.get('series_name', '')
-
-            cache_key = f'{series_id}_{episode_num}_{vid}'
-
-            # 在后台线程池执行下载与解密（带防重入锁，绝不阻塞主事件循环）
-            decrypted = await anyio.to_thread.run_sync(
-                _fetch_and_decrypt_sync, cache_key, vid, series_name, episode_num
-            )
-
+            decrypted = res['data']
             file_size = len(decrypted)
             range_header = request.headers.get('Range')
 
