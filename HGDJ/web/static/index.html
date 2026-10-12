@@ -427,7 +427,7 @@ async function openDetail(seriesId) {
 }
 
 // ── 全屏Blob内存预载架构（全屏绝不闪退、0网络缓冲秒切、画面中央顶层提示） ──
-console.log('[HGDJ] 全屏Blob秒切播放内核已加载 v2.0');
+console.log('[HGDJ] 全屏Blob秒切播放内核已加载 v2.1');
 
 let _currentSeries = '', _currentEp = 0, _totalEps = 0;
 let _lastSaveTime = 0;
@@ -445,6 +445,28 @@ function showCenterHUD(text, duration = 1800) {
   hud.classList.add('show');
   clearTimeout(_hudTimer);
   _hudTimer = setTimeout(() => hud.classList.remove('show'), duration);
+}
+
+// 智能安全起播：彻底绕过浏览器切集 Autoplay 拦截导致暂停转圈的问题
+function safePlay(video, onStarted) {
+  if (!video) return;
+  const p = video.play();
+  if (p !== undefined) {
+    p.then(() => {
+      if (onStarted) onStarted();
+    }).catch(err => {
+      console.warn('[HGDJ] 自动播放受浏览器拦截，启用无缝静音起播降级:', err);
+      const prevMuted = video.muted;
+      video.muted = true;
+      video.play().then(() => {
+        setTimeout(() => { video.muted = prevMuted; }, 150);
+        if (onStarted) onStarted();
+      }).catch(err2 => {
+        console.warn('[HGDJ] 静音播放亦受阻:', err2);
+        showCenterHUD('▶ 点击继续播放', 4000);
+      });
+    });
+  }
 }
 
 function updatePreloadStatus(text, color = 'var(--text2)') {
@@ -597,7 +619,7 @@ async function playEpisode(seriesId, epNum, total, seekTime = 0) {
     // 绑定事件
     bindPlayerEvents(video, seriesId, epNum, total);
 
-    video.play().catch(()=>{});
+    safePlay(video);
 
     // 启动对再下一集的预加载
     triggerPreloadNext(seriesId, epNum, total);
@@ -636,7 +658,7 @@ async function playEpisode(seriesId, epNum, total, seekTime = 0) {
   video.src = API + `/api/play/${seriesId}/${epNum}`;
   video.load();
   if (title) title.textContent = `正在播放第 ${epNum} 集 / 共 ${total} 集`;
-  video.play().catch(()=>{});
+  safePlay(video);
 
   // 启动对下一集的内存预加载
   triggerPreloadNext(seriesId, epNum, total);
@@ -757,7 +779,12 @@ document.addEventListener('keydown', (e) => {
     video.currentTime = newTime;
     showCenterHUD(`⏩ +5s (${formatTime(newTime)})`, 800);
   }
-  // 4. ESC 键：退出弹窗
+  // 4. F 键：全屏 / 退出全屏
+  else if (e.code === 'KeyF' || e.key === 'f' || e.key === 'F') {
+    e.preventDefault();
+    toggleContainerFullscreen();
+  }
+  // 5. ESC 键：退出弹窗
   else if (e.code === 'Escape' || e.key === 'Escape' || e.keyCode === 27) {
     closeModal();
   }
