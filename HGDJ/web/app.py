@@ -89,6 +89,33 @@ def _fetch_and_decrypt_sync(cache_key: str, vid: str, series_name: str, episode_
         return decrypted
 
 
+def _get_cached_series_detail(series_id: str) -> dict:
+    """获取剧集详情并缓存，避免每次切集都爬取外部网页"""
+    with _series_cache_lock:
+        if series_id in _series_cache:
+            return _series_cache[series_id]
+    sd = web_get_series_detail(series_id)
+    with _series_cache_lock:
+        _series_cache[series_id] = sd
+    # 预注册剧集及各分集 vid 到数据库，后续播放无需重复网络爬取
+    if _state_db:
+        try:
+            _state_db.upsert_series(
+                series_id=series_id,
+                name=sd.get('series_name', ''),
+                cover_url=sd.get('series_cover', ''),
+                intro=sd.get('series_intro', ''),
+                episode_count=sd.get('episode_cnt', 0),
+                tags=','.join(sd.get('tags', [])) if isinstance(sd.get('tags'), list) else '',
+            )
+            vid_list = sd.get('vid_list', [])
+            for i, vid in enumerate(vid_list, 1):
+                _state_db.upsert_episode(series_id, i, vid)
+        except Exception as e:
+            LOG.warning('预注册分集异常: %s', e)
+    return sd
+
+
 def _prepare_episode_sync(series_id: str, episode_num: int) -> dict:
     """在后台工作线程中确保指定集数就绪（本地文件 或 内存解密缓存）"""
     if not _client:
@@ -144,7 +171,14 @@ def create_app() -> FastAPI:
 
     @app.get('/', response_class=HTMLResponse)
     async def index():
-        return FileResponse(STATIC_DIR / 'index.html')
+        return FileResponse(
+            STATIC_DIR / 'index.html',
+            headers={
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+            }
+        )
 
     # ── 仪表盘 ──
     @app.get('/api/dashboard')
@@ -197,31 +231,6 @@ def create_app() -> FastAPI:
         except Exception as e:
             LOG.error('搜索异常: %s', e)
             return JSONResponse({'error': str(e)}, 500)
-
-    def _get_cached_series_detail(series_id: str) -> dict:
-        with _series_cache_lock:
-            if series_id in _series_cache:
-                return _series_cache[series_id]
-        sd = web_get_series_detail(series_id)
-        with _series_cache_lock:
-            _series_cache[series_id] = sd
-        # 预注册剧集及各分集 vid 到数据库，后续播放无需重复网络爬取
-        if _state_db:
-            try:
-                _state_db.upsert_series(
-                    series_id=series_id,
-                    name=sd.get('series_name', ''),
-                    cover_url=sd.get('series_cover', ''),
-                    intro=sd.get('series_intro', ''),
-                    episode_count=sd.get('episode_cnt', 0),
-                    tags=','.join(sd.get('tags', [])) if isinstance(sd.get('tags'), list) else '',
-                )
-                vid_list = sd.get('vid_list', [])
-                for i, vid in enumerate(vid_list, 1):
-                    _state_db.upsert_episode(series_id, i, vid)
-            except Exception as e:
-                LOG.warning('预注册分集异常: %s', e)
-        return sd
 
     # ── 剧集详情 ──
     @app.get('/api/series/{series_id}')

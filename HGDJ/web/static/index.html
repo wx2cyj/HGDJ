@@ -91,7 +91,7 @@ a{color:var(--accent2);text-decoration:none}
 .video-stage{position:relative;width:100%;min-height:220px;background:#000;display:flex;justify-content:center;align-items:center;overflow:hidden}
 .player-video{width:100%;max-height:60vh;display:block;background:#000;transition:opacity .15s ease}
 .player-video.active{position:relative;z-index:2;opacity:1;pointer-events:auto}
-.player-video.next{position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;opacity:0;pointer-events:none}
+.player-video.next{position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;opacity:0.01;pointer-events:none}
 .player-tip{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.8);color:#fff;padding:10px 22px;border-radius:24px;font-size:16px;pointer-events:none;opacity:0;transition:opacity .2s;z-index:25;font-weight:600;backdrop-filter:blur(6px);box-shadow:0 4px 16px rgba(0,0,0,.5)}
 .player-tip.show{opacity:1}
 .preload-badge{position:absolute;top:12px;right:12px;background:rgba(0,200,83,.9);color:#fff;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:600;z-index:20;opacity:0;transition:opacity .3s;pointer-events:none;backdrop-filter:blur(4px);display:flex;align-items:center;gap:4px;box-shadow:0 2px 8px rgba(0,0,0,.4)}
@@ -389,7 +389,10 @@ async function openDetail(seriesId) {
           <div class="preload-badge" id="preloadBadge">⚡ 下一集已就绪</div>
         </div>
         <div class="player-title">
-          <span id="playerTitle"></span>
+          <div>
+            <span id="playerTitle"></span>
+            <span id="preloadStatus" style="font-size:12px;margin-left:8px"></span>
+          </div>
           <div style="display:flex;align-items:center;gap:10px">
             <span style="font-size:12px;color:var(--text2)">空格 暂停/播放 · 左右 快退/快进 5s · 双击全屏</span>
             <button class="btn btn-outline" style="padding:4px 10px;font-size:12px" onclick="toggleContainerFullscreen()">⛶ 全屏</button>
@@ -427,12 +430,16 @@ async function openDetail(seriesId) {
 }
 
 // ── 双缓冲无缝播放器状态与逻辑 ──
+console.log('[HGDJ] 无缝双播放器内核已加载 v1.3');
+
 let _currentSeries = '', _currentEp = 0, _totalEps = 0;
 let _lastSaveTime = 0;
 let _activePlayerIdx = 0;    // 0: A激活, 1: B激活
 let _preloadEp = 0;          // 正在预加载的集数
-let _isPreloadReady = false; // 备用播放器是否已完全就绪 (canplay)
+let _isPreloadReady = false; // 备用播放器是否已就绪 (canplay/loadeddata)
+let _isBackendReady = false; // 后端内存解密是否就绪
 let _preloadTimer = null;    // 延迟预热定时器
+let _pollReadyTimer = null;
 let _badgeTimer = null;
 
 function getActiveVideo() {
@@ -445,6 +452,21 @@ function getNextVideo() {
   const vA = document.getElementById('videoPlayerA');
   const vB = document.getElementById('videoPlayerB');
   return _activePlayerIdx === 0 ? vB : vA;
+}
+
+function updatePreloadStatus(text, color = 'var(--text2)') {
+  const el = document.getElementById('preloadStatus');
+  if (el) el.innerHTML = text ? `<span style="color:${color}">${text}</span>` : '';
+  const btn = document.getElementById('btnNextEp');
+  if (btn) {
+    if (_isPreloadReady || _isBackendReady) {
+      btn.innerHTML = `下一集 ⏭ <span style="font-size:11px;color:var(--green)">⚡就绪</span>`;
+    } else if (_preloadEp > 0) {
+      btn.innerHTML = `下一集 ⏭ <span style="font-size:11px;color:var(--orange)">⏳预载中</span>`;
+    } else {
+      btn.innerHTML = `下一集 ⏭`;
+    }
+  }
 }
 
 function showPreloadBadge(text = '⚡ 下一集已就绪') {
@@ -484,10 +506,13 @@ function closeModal() {
   saveCurrentProgress();
   document.getElementById('modal').classList.remove('show');
   clearTimeout(_preloadTimer);
+  clearInterval(_pollReadyTimer);
   clearTimeout(_badgeTimer);
   _preloadEp = 0;
   _isPreloadReady = false;
+  _isBackendReady = false;
   hidePreloadBadge();
+  updatePreloadStatus('');
 
   const vA = document.getElementById('videoPlayerA');
   const vB = document.getElementById('videoPlayerB');
@@ -508,25 +533,38 @@ function closeModal() {
 // ── 后台预加载下一集（后端解密预热 + 浏览器解码预热） ──
 function triggerPreloadNext(seriesId, currentEp, total) {
   clearTimeout(_preloadTimer);
+  clearInterval(_pollReadyTimer);
   if (currentEp >= total) {
     _preloadEp = 0;
     _isPreloadReady = false;
+    _isBackendReady = false;
     hidePreloadBadge();
+    updatePreloadStatus('');
     return;
   }
 
   const nextEp = currentEp + 1;
-  if (_preloadEp === nextEp && _isPreloadReady) return;
-
   _preloadEp = nextEp;
   _isPreloadReady = false;
+  _isBackendReady = false;
+  updatePreloadStatus(`⚡ 第${nextEp}集 缓冲中...`, 'var(--orange)');
 
-  // 播放 2 秒后平稳启动预加载（防连续快速切集）
+  // 播放 0.6 秒后平稳启动预加载（快速响应）
   _preloadTimer = setTimeout(() => {
     if (_currentSeries !== seriesId || _currentEp !== currentEp) return;
+    console.log(`[HGDJ] 启动预载第 ${nextEp} 集...`);
 
     // 1. 通知后端提前下载解密存入内存缓存（网络与解密预热）
-    fetch(API + `/api/preload/${seriesId}/${nextEp}`).catch(() => {});
+    fetch(API + `/api/preload/${seriesId}/${nextEp}`)
+      .then(r => r.json())
+      .then(res => {
+        if (_preloadEp === nextEp && res.ok) {
+          _isBackendReady = true;
+          console.log(`[HGDJ] 后端内存预热就绪:`, res);
+          updatePreloadStatus(`⚡ 第 ${nextEp} 集已就绪`, 'var(--green)');
+        }
+      })
+      .catch(e => console.warn('[HGDJ] 后端预加载失败:', e));
 
     // 2. 备用 Video 标签在后台静音拉取数据并解码首帧（解码预热）
     const nextVideo = getNextVideo();
@@ -538,18 +576,37 @@ function triggerPreloadNext(seriesId, currentEp, total) {
     nextVideo.removeAttribute('src');
     nextVideo.load();
 
-    const onCanPlay = () => {
-      if (_preloadEp === nextEp) {
+    const markReady = () => {
+      if (_preloadEp === nextEp && !_isPreloadReady) {
         _isPreloadReady = true;
-        showPreloadBadge(`⚡ 第 ${nextEp} 集已就绪（无缝切集）`);
+        console.log(`[HGDJ] 备用播放器首帧就绪 (readyState: ${nextVideo.readyState})`);
+        showPreloadBadge(`⚡ 第 ${nextEp} 集已就绪（无缝直切）`);
+        updatePreloadStatus(`⚡ 第 ${nextEp} 集已就绪（无缝直切）`, 'var(--green)');
       }
-      nextVideo.removeEventListener('canplay', onCanPlay);
     };
-    nextVideo.addEventListener('canplay', onCanPlay);
+
+    ['loadeddata', 'canplay', 'canplaythrough'].forEach(evt => {
+      nextVideo.addEventListener(evt, markReady, { once: true });
+    });
+
+    // 备用轮询检测 readyState >= 2
+    let pollCount = 0;
+    clearInterval(_pollReadyTimer);
+    _pollReadyTimer = setInterval(() => {
+      pollCount++;
+      if (_preloadEp !== nextEp || _isPreloadReady || pollCount > 40) {
+        clearInterval(_pollReadyTimer);
+        return;
+      }
+      if (nextVideo.readyState >= 2) {
+        clearInterval(_pollReadyTimer);
+        markReady();
+      }
+    }, 200);
 
     nextVideo.src = API + `/api/play/${seriesId}/${nextEp}`;
     nextVideo.load();
-  }, 2000);
+  }, 600);
 }
 
 // ── 播放指定集数 ──
@@ -570,8 +627,11 @@ async function playEpisode(seriesId, epNum, total, seekTime = 0) {
   const activeVideo = getActiveVideo();
   const nextVideo = getNextVideo();
 
-  // ── 核心分支：命中预加载，执行 0 延迟无缝直切 ──
-  if (epNum === _preloadEp && _isPreloadReady && nextVideo && nextVideo.readyState >= 2) {
+  // ── 核心分支：命中预加载（播放器就绪 或 后端内存已解密就绪），执行 0 延迟无缝直切 ──
+  if (epNum === _preloadEp && (_isPreloadReady || _isBackendReady) && nextVideo) {
+    console.log(`[HGDJ] 命中预加载，执行无缝直切 -> 第 ${epNum} 集 (playerReady: ${_isPreloadReady}, backendReady: ${_isBackendReady})`);
+    clearInterval(_pollReadyTimer);
+
     // 1. 暂停当前视频并解除事件
     if (activeVideo) {
       activeVideo.pause();
@@ -597,7 +657,9 @@ async function playEpisode(seriesId, epNum, total, seekTime = 0) {
     _currentEp = epNum;
     _preloadEp = 0;
     _isPreloadReady = false;
+    _isBackendReady = false;
     hidePreloadBadge();
+    updatePreloadStatus('');
 
     // 5. 绑定播放事件到新的 active 播放器
     bindPlayerEvents(nextVideo, seriesId, epNum, total);
@@ -624,9 +686,12 @@ async function playEpisode(seriesId, epNum, total, seekTime = 0) {
   // ── 未命中预加载（初次播放、跳集播放等） ──
   _currentEp = epNum;
   clearTimeout(_preloadTimer);
+  clearInterval(_pollReadyTimer);
   _preloadEp = 0;
   _isPreloadReady = false;
+  _isBackendReady = false;
   hidePreloadBadge();
+  updatePreloadStatus('');
 
   if (title) title.textContent = `正在加载第 ${epNum} 集（实时解密）...`;
 
