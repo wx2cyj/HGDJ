@@ -345,34 +345,6 @@ def create_app() -> FastAPI:
             LOG.error('播放失败: %s', e)
             return JSONResponse({'error': str(e)}, 500)
 
-    # ── 下载管理 ──
-    @app.post('/api/download/{series_id}')
-    async def add_download(series_id: str):
-        if not _download_mgr:
-            return JSONResponse({'error': 'not ready'}, 503)
-        try:
-            result = _download_mgr.enqueue_series(series_id)
-            return result
-        except Exception as e:
-            return JSONResponse({'error': str(e)}, 500)
-
-    @app.delete('/api/download/{series_id}')
-    async def cancel_download(series_id: str):
-        if not _state_db:
-            return JSONResponse({'error': 'not ready'}, 503)
-        _state_db.remove_from_queue(series_id)
-        _state_db.set_series_status(series_id, 'cancelled')
-        return {'ok': True}
-
-    @app.get('/api/downloads')
-    async def downloads():
-        if not _state_db:
-            return JSONResponse({'error': 'not ready'}, 503)
-        queue = _state_db.get_queue()
-        all_series = _state_db.list_series()
-        downloading = [s for s in all_series if s['status'] in ('downloading', 'done', 'cancelled')]
-        return {'queue': queue, 'history': downloading[:50]}
-
     # ── 观看历史 ──
     @app.get('/api/history')
     async def get_history():

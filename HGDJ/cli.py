@@ -58,16 +58,8 @@ def main() -> None:
     dl_cfg = cfg.get('download', {})
     state = StateDB(cfg.get('state', {}).get('database', '/data/state.sqlite3'))
     client = HongguoClient(request_interval=dl_cfg.get('request_interval', 2.0))
-    download_mgr = DownloadManager(
-        client=client, state=state,
-        media_root=dl_cfg.get('root', '/media'),
-        concurrent=dl_cfg.get('concurrent', 2),
-        retries=dl_cfg.get('retries', 3),
-    )
-    set_shared(state, client, download_mgr)
-
-    # 启动下载管理器
-    download_mgr.start()
+    # 专精在线秒播，无需启动后台自动下载队列
+    set_shared(state, client, None)
 
     # 启动 WebUI
     port = args.port or cfg.get('web', {}).get('port', 8098)

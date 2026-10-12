@@ -97,19 +97,6 @@ a{color:var(--accent2);text-decoration:none}
 
 .player-title{padding:12px;font-size:14px;color:var(--text2);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
 .player-nav{display:flex;gap:10px;padding:0 12px 12px;align-items:center}
-/* Downloads page */
-.dl-item{background:var(--card);border-radius:12px;padding:16px;margin-bottom:12px;display:flex;gap:16px;align-items:center}
-.dl-item .name{flex:1;font-weight:600}
-.dl-progress{width:220px}
-.progress-bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden}
-.progress-fill{height:100%;background:var(--green);border-radius:3px;transition:width .3s}
-.progress-text{font-size:11px;color:var(--text2);margin-top:4px}
-/* Status badge */
-.status{padding:3px 10px;border-radius:10px;font-size:11px;font-weight:600}
-.status-done{background:rgba(0,200,83,.15);color:var(--green)}
-.status-downloading{background:rgba(255,152,0,.15);color:var(--orange)}
-.status-failed{background:rgba(233,69,96,.15);color:var(--red)}
-.status-pending{background:rgba(170,170,170,.1);color:var(--text2)}
 /* Loading & Empty */
 .loading{text-align:center;padding:60px 20px;color:var(--text2)}
 .spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
@@ -139,8 +126,6 @@ a{color:var(--accent2);text-decoration:none}
   .detail-stats{justify-content:center}
   .detail-actions{justify-content:center}
   .grid{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
-  .dl-item{flex-direction:column;align-items:flex-start;gap:10px}
-  .dl-progress{width:100%}
   .history-item{flex-direction:column;align-items:flex-start;gap:10px}
   .history-actions{width:100%;justify-content:space-between}
 }
@@ -148,7 +133,7 @@ a{color:var(--accent2);text-decoration:none}
 </head>
 <body>
 <div class="header">
-  <div class="logo">🍎 <span>红果下载</span></div>
+  <div class="logo">🍎 <span>红果短剧</span></div>
   <div class="search-box">
     <input id="searchInput" placeholder="搜索短剧名称（回车搜索）..." onkeydown="if(event.key==='Enter')doSearch()">
     <button onclick="doSearch()">🔍</button>
@@ -159,7 +144,6 @@ a{color:var(--accent2);text-decoration:none}
     <button onclick="showPage('comic-drama',this)">漫剧</button>
     <button onclick="showPage('ai-drama',this)">AI剧</button>
     <button onclick="showPage('history',this)">最近观看</button>
-    <button onclick="showPage('downloads',this)">下载管理</button>
   </div>
 </div>
 
@@ -187,7 +171,6 @@ function showPage(page, btn) {
   if (btn) btn.classList.add('active');
   if (page === 'home') loadHome();
   else if (page === 'history') loadHistory();
-  else if (page === 'downloads') loadDownloads();
   else loadCategory(page, 1);
 }
 
@@ -203,10 +186,8 @@ async function loadHome() {
     let html = '';
     const d = dashRes;
     html += `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
-      <div class="stat">已收录 <b>${d.total_series||0}</b> 部</div>
-      <div class="stat">已下载 <b>${d.done_episodes||0}</b> 集</div>
-      <div class="stat">下载中 <b>${d.downloading_episodes||0}</b> 集</div>
-      <div class="stat">总大小 <b>${d.total_size_mb||0}</b> MB</div>
+      <div class="stat">已收录 <b>${d.total_series||0}</b> 部短剧</div>
+      <div class="stat">播放模式 <b>在线秒播 · 0卡顿无缝连播</b></div>
     </div>`;
     html += `<div class="section-title">
       <span class="icon">🔥</span>热门推荐
@@ -359,21 +340,22 @@ async function openDetail(seriesId) {
         <div class="card-meta" style="margin:8px 0">${tags.map(t=>'<span class="tag">'+t+'</span>').join('')}</div>
         <div class="intro">${intro}</div>
         <div class="detail-stats">
-          <div class="stat">共 <b>${total}</b> 集</div>
-          <div class="stat">已下载 <b>${stats.done_episodes||0}</b></div>
-          ${stats.failed_episodes?'<div class="stat">失败 <b style="color:var(--red)">'+stats.failed_episodes+'</b></div>':''}
-          ${stats.total_size_mb?'<div class="stat">大小 <b>'+stats.total_size_mb+'</b> MB</div>':''}
+          <div class="stat">全剧共 <b>${total}</b> 集</div>
+          <div class="stat">播放 <b>在线秒播 · 0卡顿无缝连播</b></div>
         </div>
         <div class="detail-actions">
           ${hist ? `
-            <button class="btn btn-success" onclick="playEpisode('${seriesId}', ${hist.episode_num}, ${total}, ${hist.current_time})">
+            <button class="btn btn-primary" onclick="playEpisode('${seriesId}', ${hist.episode_num}, ${total}, ${hist.current_time})">
               ▶ 继续播放：第 ${hist.episode_num} 集 (${formatTime(hist.current_time)})
             </button>
-          ` : ''}
-          <button class="btn btn-primary" onclick="startDownload('${seriesId}')" ${inQueue?'disabled':''}>
-            ${inQueue?'⏳ 已在下载队列':'⬇️ 下载全集'}
-          </button>
-          <button class="btn btn-outline" onclick="cancelDownload('${seriesId}')">取消下载</button>
+            <button class="btn btn-outline" onclick="playEpisode('${seriesId}', 1, ${total})">
+              从头播放
+            </button>
+          ` : `
+            <button class="btn btn-primary" onclick="playEpisode('${seriesId}', 1, ${total})">
+              ▶ 开始播放
+            </button>
+          `}
         </div>
       </div>
     </div>`;
@@ -406,13 +388,9 @@ async function openDetail(seriesId) {
     html += `<div class="ep-section">
       <h3><span>选集播放</span> <small style="font-size:12px;color:var(--text2);font-weight:normal">（点击任意集数实时解密播放）</small></h3>
       <div class="ep-grid">`;
-    const epMap = {};
-    for (const e of eps) epMap[e.episode_num] = e.status;
     for (let i = 1; i <= total; i++) {
-      const st = epMap[i] || 'pending';
       const isLastWatched = hist && hist.episode_num === i;
-      let cls = st === 'done' ? 'done' : st === 'failed' ? 'failed' : st === 'downloading' ? 'downloading' : '';
-      if (isLastWatched) cls += ' last-watched';
+      let cls = isLastWatched ? 'last-watched' : '';
       html += `<div class="ep-btn ${cls}" id="ep${i}" onclick="playEpisode('${seriesId}',${i},${total})">${i}</div>`;
     }
     html += '</div></div>';
@@ -790,76 +768,6 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// ── 下载操作 ──
-async function startDownload(seriesId) {
-  try {
-    const res = await fetch(API+'/api/download/'+seriesId, {method:'POST'}).then(r=>r.json());
-    if (res.error) { alert('错误: '+res.error); return; }
-    alert(`✅ 《${res.name}》已加入下载队列\n共 ${res.episode_count} 集`);
-    openDetail(seriesId);
-  } catch(e) { alert('操作失败: '+e.message); }
-}
-
-async function cancelDownload(seriesId) {
-  if (!confirm('确认取消下载？')) return;
-  await fetch(API+'/api/download/'+seriesId, {method:'DELETE'});
-  openDetail(seriesId);
-}
-
-// ── 下载管理页 ──
-async function loadDownloads() {
-  const el = document.getElementById('content');
-  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-  try {
-    const res = await fetch(API+'/api/downloads').then(r=>r.json());
-    let html = `<div class="section-title">
-      <span class="icon">⬇️</span>下载管理
-      <span class="section-meta">只下载用户手动添加的任务</span>
-    </div>`;
-
-    const queue = res.queue || [];
-    const history = res.history || [];
-
-    if (queue.length === 0 && history.length === 0) {
-      html += '<div class="empty"><div class="icon">📭</div>暂无下载任务<br><small style="color:#666">在首页或分类中选择短剧，点击"下载全集"开始</small></div>';
-    }
-
-    if (queue.length > 0) {
-      html += '<h3 style="margin:16px 0 10px;color:var(--orange)">📥 当前正在下载的队列</h3>';
-      for (const item of queue) {
-        const total = item.episode_count || 1;
-        const done = item.done_count || 0;
-        const pct = Math.round(done / total * 100);
-        html += `<div class="dl-item" onclick="openDetail('${item.series_id}')" style="cursor:pointer">
-          <div class="name">${item.name || item.series_id}</div>
-          <div class="dl-progress">
-            <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-            <div class="progress-text">${done}/${total} 集 (${pct}%) ${item.downloading_count?' · 下载中 '+item.downloading_count:''}${item.failed_count?' · 失败 '+item.failed_count:''}</div>
-          </div>
-          <span class="status status-downloading">下载中</span>
-        </div>`;
-      }
-    }
-
-    if (history.length > 0) {
-      html += '<h3 style="margin:24px 0 10px">📋 历史与已入库任务</h3>';
-      for (const item of history) {
-        const stCls = item.status === 'done' ? 'done' : item.status === 'cancelled' ? 'failed' : 'downloading';
-        const stText = item.status === 'done' ? '已完成' : item.status === 'cancelled' ? '已取消' : '下载中';
-        html += `<div class="dl-item" onclick="openDetail('${item.series_id}')" style="cursor:pointer">
-          <div class="name">${item.name || item.series_id}</div>
-          <div style="font-size:12px;color:var(--text2)">${item.episode_count||'?'} 集</div>
-          <span class="status status-${stCls}">${stText}</span>
-        </div>`;
-      }
-    }
-
-    el.innerHTML = html;
-  } catch(e) {
-    el.innerHTML = '<div class="empty"><div class="icon">😵</div>加载失败</div>';
-  }
-}
-
 // ── 最近观看页面 ──
 async function loadHistory() {
   const el = document.getElementById('content');
@@ -950,8 +858,7 @@ async function clearAllHistory() {
 
 // 自动刷新
 setInterval(() => {
-  if (currentPage === 'downloads') loadDownloads();
-  else if (currentPage === 'history') loadHistory();
+  if (currentPage === 'history') loadHistory();
 }, 15000);
 
 // 启动默认页
