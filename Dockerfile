@@ -9,7 +9,7 @@ COPY . .
 
 EXPOSE 8098
 
-VOLUME ["/config", "/data", "/media", "/logs"]
+VOLUME ["/config", "/data", "/logs"]
 
 ENV TZ=Asia/Shanghai
 

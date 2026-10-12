@@ -51,13 +51,11 @@ def main() -> None:
 
     from .client import HongguoClient
     from .state import StateDB
-    from .download import DownloadManager
     from .web.app import create_app, set_shared
 
     # 初始化组件
-    dl_cfg = cfg.get('download', {})
     state = StateDB(cfg.get('state', {}).get('database', '/data/state.sqlite3'))
-    client = HongguoClient(request_interval=dl_cfg.get('request_interval', 2.0))
+    client = HongguoClient(request_interval=cfg.get('request_interval', 2.0))
     # 专精在线秒播，无需启动后台自动下载队列
     set_shared(state, client, None)
 

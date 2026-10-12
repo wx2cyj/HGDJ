@@ -39,7 +39,8 @@
 | **配置文件** | `/config` | `/mnt/user/appdata/HGDJ/config` | 存放 `config.json` |
 | **状态库** | `/data` | `/mnt/user/appdata/HGDJ/data` | 存放 SQLite 状态数据库 `state.sqlite3` |
 | **运行日志** | `/logs` | `/mnt/user/appdata/HGDJ/logs` | 存放每日轮转日志 `hgdj.log` |
-| **视频媒体库** | `/media` | `/mnt/user/QTZL/红果` | 下载好的短剧视频与 NFO 元数据 |
+
+> 💡 **无需映射视频下载目录**：本平台采用流式解密与内存 Blob 瞬时预载，随点随看，不需要任何下载存储空间。
 
 ---
 
