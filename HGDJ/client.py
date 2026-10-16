@@ -22,6 +22,42 @@ APP_USER_AGENT = (
     "Build/BP2A.250605.031.A3; Cronet/TTNetVersion:04657795 2026-01-23 "
     "QuicVersion:c67e9834 2025-09-08)"
 )
+PRELOAD_USER_AGENT = (
+    "com.phoenix.read/71532 (Linux; U; Android 9; SM-N9860; "
+    "Build/PQ3A.190705.10241111;tt-ok/3.12.13.20)"
+)
+PRELOAD_QUERY = {
+    "klink_egdi": "AAI29o4dI-eMiO73_SRSbZ_0By1v3fUSriNeu8-L951MoXhWT88pzj5B",
+    "iid": "3788260546453235",
+    "device_id": "538083340353620",
+    "ac": "wifi",
+    "channel": "oppo_8662_64",
+    "aid": "8662",
+    "app_name": "novelread",
+    "version_code": "71532",
+    "version_name": "7.1.5.32",
+    "device_platform": "android",
+    "os": "android",
+    "ssmix": "a",
+    "device_type": "SM-N9860",
+    "device_brand": "Samsung",
+    "language": "zh",
+    "os_api": "28",
+    "os_version": "9",
+    "manifest_version_code": "71532",
+    "resolution": "900*1600",
+    "dpi": "320",
+    "update_version_code": "71532",
+    "host_abi": "arm64-v8a",
+    "dragon_device_type": "pad",
+    "pv_player": "71532",
+    "compliance_status": "0",
+    "need_personal_recommend": "1",
+    "player_so_load": "1",
+    "is_android_pad_screen": "0",
+    "rom_version": "PQ3A.190705.10241111+release-keys",
+    "cdid": "b4f93387-5319-4134-aab9-2cd4e9279b8f",
+}
 WEB_USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -146,17 +182,64 @@ class HongguoClient:
 
     def get_video_model(self, video_id: str) -> dict:
         """获取单集的播放信息（CDN URL + 加密密钥）"""
-        result = self.app_request('/novel/player/video_model/v1/', {
-            'video_id': video_id,
-            'content_type': 1,
-            'biz_param': {'need_all_video_definition': True, 'video_platform': 3},
-        })
-        if result.get('code') != 0:
-            raise RuntimeError(f"video_model 失败: {result.get('message', '未知错误')}")
-        vm_raw = result.get('data', {}).get('video_model', '')
+        self._throttle()
+        # 2026-10-15 红果对 video_model/v1 实施静默风控（HTTP 200 空包），全面切换至 preload 接口
+        query = dict(PRELOAD_QUERY)
+        query["_rticket"] = str(int(time.time() * 1000))
+        query_str = urllib.parse.urlencode(query)
+
+        biz = {
+            "detail_page_version": 0,
+            "device_level": 3,
+            "disable_digg_stat": False,
+            "need_all_video_definition": True,
+            "need_mp4_align": False,
+            "use_os_player": False,
+            "use_server_dns": False,
+            "video_platform": 1024,
+        }
+        payload = {
+            "biz_param": biz,
+            "dr_scene": "preload",
+            "mixed_video_id_map": {
+                "1004": [video_id],
+            },
+        }
+
+        body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
+        url = APP_BASE_URL.rstrip('/') + f"/novel/player/multi_video_model/preload/v1?{query_str}"
+        req = urllib.request.Request(url, method='POST', data=body)
+        req.add_header('User-Agent', PRELOAD_USER_AGENT)
+        req.add_header('Accept', 'application/json; charset=utf-8,application/x-protobuf')
+        req.add_header('Accept-Encoding', 'gzip')
+        req.add_header('Content-Type', 'application/json; charset=utf-8')
+
+        try:
+            with self._opener.open(req, timeout=30) as resp:
+                raw = resp.read()
+                if resp.headers.get('Content-Encoding') == 'gzip':
+                    raw = gzip.decompress(raw)
+                self._last_request = time.monotonic()
+                data = json.loads(raw.decode('utf-8', errors='replace')) if raw else {}
+        except Exception as e:
+            self._last_request = time.monotonic()
+            raise RuntimeError(f'红果 API 请求失败: {e}') from e
+
+        if data.get('code') != 0:
+            raise RuntimeError(f"video_model 失败: {data.get('message', '未知错误')}")
+
+        data_obj = data.get('data', {})
+        item = data_obj.get(video_id, {})
+        if not item:
+            for v_obj in data_obj.values():
+                if isinstance(v_obj, dict) and ('video_model' in v_obj):
+                    item = v_obj
+                    break
+
+        vm_raw = item.get('video_model', '')
         if isinstance(vm_raw, str):
-            return json.loads(vm_raw)
-        return vm_raw
+            return json.loads(vm_raw) if vm_raw else {}
+        return vm_raw if isinstance(vm_raw, dict) else {}
 
     def select_best_media(self, video_model: dict) -> dict:
         """从 video_model 中选择最佳画质"""
@@ -174,12 +257,16 @@ class HongguoClient:
             codec = meta.get('codec_type', '').lower()
             if codec == 'bytevc2':
                 continue
-            # 解析 URL
+            # 解析 URL（直链或 base64）
             raw_url = item.get('main_url', '')
-            try:
-                media_url = base64.b64decode(raw_url).decode()
-            except Exception:
+            if raw_url.startswith('http'):
                 media_url = raw_url
+            else:
+                try:
+                    pad = '=' * ((4 - len(raw_url) % 4) % 4)
+                    media_url = base64.b64decode(raw_url + pad).decode('utf-8', errors='ignore')
+                except Exception:
+                    media_url = raw_url
             if not media_url.startswith('http'):
                 continue
             # 画质评分
